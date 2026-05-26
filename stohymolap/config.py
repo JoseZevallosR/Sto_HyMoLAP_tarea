@@ -24,12 +24,12 @@ class PaperHyMoLAPConfig:
 
     # Configuración rápida.
     # Para reproducir el paper en modo pesado:
-    # max_traj_cal = 1000
-    # n_param_samples = 5000
-    # n_traj_validation = 300000
-    max_traj_cal: int = 50
-    n_param_samples: int = 500
-    n_traj_validation: int = 5000
+    #max_traj_cal = 1000
+    #n_param_samples = 5000
+    #n_traj_validation = 300000
+    max_traj_cal: int = 1000
+    n_param_samples: int = 5000
+    n_traj_validation: int = 300000
     validation_chunk_size: int = 1000
 
     # Reproducibilidad

@@ -15,10 +15,10 @@ def main():
     config = PaperHyMoLAPConfig(
         data_path="../data.csv",
 
-        max_traj_cal=500,
+        max_traj_cal=1000,
         n_param_samples=5000,
         n_traj_validation=50000,
-        validation_chunk_size=1000,
+        validation_chunk_size=2000,
 
         alpha_levy=1.3,
         beta_levy=-0.8,
