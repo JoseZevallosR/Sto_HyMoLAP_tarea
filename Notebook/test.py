@@ -1,206 +1,18 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from dataclasses import dataclass
-from typing import Optional, Dict, Tuple, List
-from scipy.stats import levy_stable
+from typing import Dict, List, Tuple
 from scipy.optimize import differential_evolution
 
-# --- METRICS (Defined here to ensure the script runs) ---
-
-def nse(obs: np.ndarray, sim: np.ndarray) -> float:
-    obs = np.asarray(obs, dtype=float)
-    sim = np.asarray(sim, dtype=float)
-    mask = np.isfinite(obs) & np.isfinite(sim)
-    obs = obs[mask]
-    sim = sim[mask]
-    denom = np.sum((obs - np.mean(obs))**2)
-    if denom == 0:
-        return np.nan
-    return 1.0 - np.sum((obs - sim)**2) / denom
+from models import StoHyMoLAPConfig, simulate_mean_response
+from metrics import METRIC_REGISTRY, nse, kge, rmse, pbias
+from utils import add_distance_to_ideal, plot_pareto_front
 
 
-def rmse(obs: np.ndarray, sim: np.ndarray) -> float:
-    obs = np.asarray(obs, dtype=float)
-    sim = np.asarray(sim, dtype=float)
-    mask = np.isfinite(obs) & np.isfinite(sim)
-    obs = obs[mask]
-    sim = sim[mask]
-    return np.sqrt(np.mean((obs - sim)**2))
+# ============================================================
+# SINGLE-OBJECTIVE FUNCTION
+# ============================================================
 
-
-def pbias(obs: np.ndarray, sim: np.ndarray) -> float:
-    obs = np.asarray(obs, dtype=float)
-    sim = np.asarray(sim, dtype=float)
-    mask = np.isfinite(obs) & np.isfinite(sim)
-    obs = obs[mask]
-    sim = sim[mask]
-    denom = np.sum(obs)
-    if denom == 0:
-        return np.nan
-    return 100.0 * np.sum(sim - obs) / denom
-
-
-def kge(obs: np.ndarray, sim: np.ndarray) -> float:
-    obs = np.asarray(obs, dtype=float)
-    sim = np.asarray(sim, dtype=float)
-    mask = np.isfinite(obs) & np.isfinite(sim)
-    obs = obs[mask]
-    sim = sim[mask]
-    if len(obs) < 2:
-        return np.nan
-    r = np.corrcoef(obs, sim)[0, 1]
-    alpha = np.std(sim, ddof=1) / np.std(obs, ddof=1) if np.std(obs, ddof=1) > 0 else np.nan
-    beta = np.mean(sim) / np.mean(obs) if np.mean(obs) != 0 else np.nan
-    return 1.0 - np.sqrt((r - 1.0)**2 + (alpha - 1.0)**2 + (beta - 1.0)**2)
-# --- MODEL CLASSES ---
-
-@dataclass
-class StoHyMoLAPConfig:
-    a: float = 1.0
-    b: float = 10.0
-    theta: float = 0.05
-    dt: float = 1.0
-    noise_type: str = "gaussian"   # "gaussian" or "levy"
-    alpha_levy: float = 1.7        # stability parameter for Levy noise
-    beta_levy: float = 0.0         # skewness parameter
-    levy_scale: float = 1.0
-    q_min: float = 1e-8            # positivity floor
-    random_seed: Optional[int] = 42
-
-
-class StoHyMoLAP:
-    """
-    Stochastic HyMoLAP model.
-
-    SDE:
-        dQ = [-(a/b) Q^(2a-1) + (1/b) psi(t)] dt + theta * Q * dL
-
-    where dL may be Gaussian or Levy-stable.
-    """
-
-    def __init__(self, config: StoHyMoLAPConfig):
-        self.config = config
-        self.rng = np.random.default_rng(config.random_seed)
-
-    def forcing(self, psi: np.ndarray, t_idx: int) -> float:
-        """
-        Effective forcing term psi(q, t).
-        In this implementation, it is provided directly as a time series.
-        """
-        return float(psi[t_idx])
-
-    def drift(self, q: float, psi_t: float) -> float:
-        a = self.config.a
-        b = self.config.b
-        q_safe = max(q, self.config.q_min)
-        return -(a / b) * (q_safe ** (2 * a - 1)) + (1.0 / b) * psi_t
-
-    def noise_increment(self) -> float:
-        """
-        Draw a stochastic increment dL for one time step dt.
-
-        Gaussian:
-            dL = sqrt(dt) * N(0,1)
-
-        Levy:
-            dL ~ levy_stable(alpha, beta, scale = levy_scale * dt^(1/alpha))
-        """
-        dt = self.config.dt
-
-        if self.config.noise_type.lower() == "gaussian":
-            return np.sqrt(dt) * self.rng.normal(0.0, 1.0)
-
-        if self.config.noise_type.lower() == "levy":
-            alpha = self.config.alpha_levy
-            beta = self.config.beta_levy
-            scale = self.config.levy_scale * (dt ** (1.0 / alpha))
-            return levy_stable.rvs(
-                alpha=alpha,
-                beta=beta,
-                loc=0.0,
-                scale=scale,
-                random_state=self.rng,
-            )
-
-        raise ValueError("noise_type must be 'gaussian' or 'levy'")
-
-    def step(self, q: float, psi_t: float) -> float:
-        """
-        One Euler-Maruyama step.
-        """
-        dt = self.config.dt
-        theta = self.config.theta
-
-        drift_term = self.drift(q, psi_t) * dt
-        diffusion_term = theta * q * self.noise_increment()
-
-        q_next = q + drift_term + diffusion_term
-
-        if not np.isfinite(q_next) or q_next > 1e6:
-            print(f"\n⚠️ BLOW-UP DETECTED at t={t}")
-            print(f"q        = {q}")
-            print(f"psi_t    = {psi_t}")
-            print(f"drift    = {drift_term}")
-            print(f"noise    = {noise}")
-            print(f"diff     = {diffusion_term}")
-            print(f"q_next   = {q_next}")
-     
-        # positivity safeguard
-        return max(q_next, self.config.q_min)
-
-    def simulate(self, psi: np.ndarray, q0: float) -> np.ndarray:
-        """
-        Simulate one discharge trajectory.
-        """
-        psi = np.asarray(psi, dtype=float)
-        q = np.empty(len(psi), dtype=float)
-        q[0] = max(float(q0), self.config.q_min)
-
-        for t in range(len(psi) - 1):
-            psi_t = self.forcing(psi, t)
-            q[t + 1] = self.step(q[t], psi_t)
-
-        return q
-
-    def simulate_ensemble(self, psi: np.ndarray, q0: float, n_members: int = 100) -> np.ndarray:
-        """
-        Simulate an ensemble of trajectories.
-        Returns array of shape (n_members, n_time).
-        """
-        out = []
-        for _ in range(n_members):
-            out.append(self.simulate(psi=psi, q0=q0))
-        return np.vstack(out)
-
-# --- OBJECTIVE FUNCTIONS ---
-
-def simulate_mean_response(
-    psi: np.ndarray,
-    q0: float,
-    params: Dict[str, float],
-    base_config: StoHyMoLAPConfig,
-    n_members: int = 30
-) -> np.ndarray:
-    """
-    Simulate multiple stochastic trajectories and return their ensemble mean.
-    """
-    cfg = StoHyMoLAPConfig(
-        a=params.get("a", base_config.a),
-        b=params.get("b", base_config.b),
-        theta=params.get("theta", base_config.theta),
-        dt=base_config.dt,
-        noise_type=base_config.noise_type,
-        alpha_levy=base_config.alpha_levy,
-        beta_levy=base_config.beta_levy,
-        levy_scale=base_config.levy_scale,
-        q_min=base_config.q_min,
-        random_seed=base_config.random_seed,
-    )
-    model = StoHyMoLAP(cfg)
-    ens = model.simulate_ensemble(psi=psi, q0=q0, n_members=n_members)
-    return np.mean(ens, axis=0)
-    
 def objective_abtheta(
     x: np.ndarray,
     psi: np.ndarray,
@@ -208,71 +20,430 @@ def objective_abtheta(
     q0: float,
     base_config: StoHyMoLAPConfig,
     metric: str = "nse",
-    n_members: int = 30
+    n_members: int = 30,
+    summary_method: str = "median"
 ) -> float:
-    """
-    Objective function for calibrating a, b, and theta.
-    """
     a, b, theta = x
+
+    if a <= 0 or b <= 0 or theta < 0:
+        return 1e6
+
+    metric = metric.lower()
+    if metric not in METRIC_REGISTRY:
+        raise ValueError(
+            f"Unknown metric '{metric}'. Available: {list(METRIC_REGISTRY.keys())}"
+        )
+
     params = {"a": a, "b": b, "theta": theta}
-    q_sim = simulate_mean_response(
+
+    try:
+        q_sim = simulate_mean_response(
+            psi=psi,
+            q0=q0,
+            params=params,
+            base_config=base_config,
+            n_members=n_members,
+            summary_method=summary_method
+        )
+    except Exception:
+        return 1e6
+
+    if not np.all(np.isfinite(q_sim)):
+        return 1e6
+
+    metric_func = METRIC_REGISTRY[metric]["func"]
+    sense = METRIC_REGISTRY[metric]["sense"]
+
+    val = metric_func(q_obs, q_sim)
+
+    if not np.isfinite(val):
+        return 1e6
+
+    if sense == "max":
+        return -val
+    if sense == "min":
+        return val
+
+    raise ValueError(f"Invalid sense for metric '{metric}'")
+
+
+# ============================================================
+# MULTIOBJECTIVE EVALUATION
+# ============================================================
+
+def evaluate_metrics(
+    x: np.ndarray,
+    psi: np.ndarray,
+    q_obs: np.ndarray,
+    q0: float,
+    base_config: StoHyMoLAPConfig,
+    metrics: List[str],
+    n_members: int = 30,
+    summary_method: str = "median"
+) -> Dict[str, float]:
+    metrics = [m.lower() for m in metrics]
+    a, b, theta = x
+
+    result: Dict[str, float] = {
+        "a": np.nan,
+        "b": np.nan,
+        "theta": np.nan
+    }
+
+    for metric in metrics:
+        result[metric] = np.nan
+        result[f"f_{metric}"] = np.inf
+
+    if a <= 0 or b <= 0 or theta < 0:
+        return result
+
+    result["a"] = a
+    result["b"] = b
+    result["theta"] = theta
+
+    params = {"a": a, "b": b, "theta": theta}
+
+    try:
+        q_sim = simulate_mean_response(
+            psi=psi,
+            q0=q0,
+            params=params,
+            base_config=base_config,
+            n_members=n_members,
+            summary_method=summary_method
+        )
+    except Exception:
+        return result
+
+    if not np.all(np.isfinite(q_sim)):
+        return result
+
+    for metric in metrics:
+        if metric not in METRIC_REGISTRY:
+            raise ValueError(
+                f"Unknown metric '{metric}'. Available: {list(METRIC_REGISTRY.keys())}"
+            )
+
+        metric_func = METRIC_REGISTRY[metric]["func"]
+        sense = METRIC_REGISTRY[metric]["sense"]
+
+        val = metric_func(q_obs, q_sim)
+
+        if not np.isfinite(val):
+            val = np.nan
+            f_val = np.inf
+        else:
+            if sense == "max":
+                f_val = 1.0 - val
+            elif sense == "min":
+                f_val = val
+            else:
+                raise ValueError(f"Invalid sense for metric '{metric}'")
+
+        result[metric] = val
+        result[f"f_{metric}"] = f_val
+
+    return result
+
+
+def objective_weighted_metrics(
+    x: np.ndarray,
+    psi: np.ndarray,
+    q_obs: np.ndarray,
+    q0: float,
+    base_config: StoHyMoLAPConfig,
+    metrics: List[str],
+    weights: List[float],
+    n_members: int = 30,
+    summary_method: str = "median"
+) -> float:
+    metrics = [m.lower() for m in metrics]
+
+    if len(metrics) != len(weights):
+        raise ValueError("metrics and weights must have the same length")
+
+    weights_arr = np.asarray(weights, dtype=float)
+
+    if np.any(weights_arr < 0):
+        raise ValueError("weights must be non-negative")
+
+    if np.sum(weights_arr) == 0:
+        raise ValueError("sum of weights must be > 0")
+
+    weights_arr = weights_arr / np.sum(weights_arr)
+
+    res = evaluate_metrics(
+        x=x,
         psi=psi,
+        q_obs=q_obs,
         q0=q0,
-        params=params,
         base_config=base_config,
+        metrics=metrics,
         n_members=n_members,
+        summary_method=summary_method
     )
 
-    if metric.lower() == "nse":
-        return -nse(q_obs, q_sim)
-    elif metric.lower() == "rmse":
-        return rmse(q_obs, q_sim)
-    elif metric.lower() == "kge":
-        return -kge(q_obs, q_sim)
-    else:
-        raise ValueError("metric must be 'nse', 'rmse', or 'kge'")
-# --- MAIN EXECUTION BLOCK ---
+    f_vals = np.array([res[f"f_{m}"] for m in metrics], dtype=float)
+
+    if not np.all(np.isfinite(f_vals)):
+        return 1e6
+
+    return float(np.sum(weights_arr * f_vals))
+
+
+# ============================================================
+# PARETO UTILITIES
+# ============================================================
+
+def dominates_general(row_i: Dict[str, float], row_j: Dict[str, float], objective_cols: List[str]) -> bool:
+    vals_i = np.array([row_i[col] for col in objective_cols], dtype=float)
+    vals_j = np.array([row_j[col] for col in objective_cols], dtype=float)
+
+    return np.all(vals_i <= vals_j) and np.any(vals_i < vals_j)
+
+
+def extract_pareto_front_general(df: pd.DataFrame, metrics: List[str]) -> pd.DataFrame:
+    if df.empty:
+        return df.copy()
+
+    metrics = [m.lower() for m in metrics]
+    objective_cols = [f"f_{m}" for m in metrics]
+    is_nondominated = np.ones(len(df), dtype=bool)
+    rows = df.to_dict("records")
+
+    for i in range(len(rows)):
+        if not is_nondominated[i]:
+            continue
+        for j in range(len(rows)):
+            if i == j:
+                continue
+            if dominates_general(rows[j], rows[i], objective_cols):
+                is_nondominated[i] = False
+                break
+
+    pareto_df = df.loc[is_nondominated].copy()
+    pareto_df = pareto_df.reset_index(drop=True)
+    return pareto_df
+
+
+def calibrate_pareto_by_weight_scan(
+    psi: np.ndarray,
+    q_obs: np.ndarray,
+    q0: float,
+    base_config: StoHyMoLAPConfig,
+    bounds_abtheta: List[Tuple[float, float]],
+    metrics: List[str],
+    weight_sets: List[List[float]],
+    n_members_calibration: int = 30,
+    n_members_refit: int = 100,
+    summary_method: str = "median",
+    maxiter: int = 25,
+    popsize: int = 12,
+    seed: int = 123
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    metrics = [m.lower() for m in metrics]
+    all_solutions = []
+
+    for weights in weight_sets:
+        weights_arr = np.asarray(weights, dtype=float)
+
+        if len(weights_arr) != len(metrics):
+            raise ValueError("Each weight vector must have the same length as metrics")
+
+        if np.any(weights_arr < 0):
+            raise ValueError("Weights must be non-negative")
+
+        if np.sum(weights_arr) == 0:
+            raise ValueError("The sum of weights must be > 0")
+
+        weights_arr = weights_arr / np.sum(weights_arr)
+
+        weight_msg = ", ".join(
+            [f"{m}={w:.2f}" for m, w in zip(metrics, weights_arr)]
+        )
+        print(f"\nCalibrating for weights: {weight_msg}")
+
+        result = differential_evolution(
+            objective_weighted_metrics,
+            bounds=bounds_abtheta,
+            args=(
+                psi,
+                q_obs,
+                q0,
+                base_config,
+                metrics,
+                weights_arr.tolist(),
+                n_members_calibration,
+                summary_method
+            ),
+            seed=seed,
+            maxiter=maxiter,
+            popsize=popsize,
+            polish=True,
+            workers=-1,
+            updating="deferred"
+        )
+
+        x_best = result.x
+
+        res = evaluate_metrics(
+            x=x_best,
+            psi=psi,
+            q_obs=q_obs,
+            q0=q0,
+            base_config=base_config,
+            metrics=metrics,
+            n_members=n_members_refit,
+            summary_method=summary_method
+        )
+
+        for m, w in zip(metrics, weights_arr):
+            res[f"w_{m}"] = float(w)
+
+        res["weighted_obj"] = float(result.fun)
+        all_solutions.append(res)
+
+    all_df = pd.DataFrame(all_solutions)
+    pareto_df = extract_pareto_front_general(all_df, metrics=metrics)
+
+    return all_df, pareto_df
+
+
+# ============================================================
+# MAIN
+# ============================================================
 
 if __name__ == "__main__":
-    # 1. Create dummy data for demonstration (Replace this with your real data)
-    df = pd.read_csv("../data.csv",encoding='utf-8', sep = ';')
-    df['psi'] = np.maximum(df['Precipitation'] - df['PET'], 0)
-    psi_obs = df["psi"].to_numpy()
-    q_obs = df["Qobs"].to_numpy()
+    # --------------------------------------------------------
+    # 1. Read data
+    # --------------------------------------------------------
+    df = pd.read_csv("../data.csv", encoding="utf-8", sep=";")
+
+    df["psi"] = (df["Precipitation"] - df["PET"]).clip(lower=0)
+
+    psi_obs = df["psi"].to_numpy(dtype=float)
+    q_obs = df["Qobs"].to_numpy(dtype=float)
+
+    mask = np.isfinite(psi_obs) & np.isfinite(q_obs)
+    psi_obs = psi_obs[mask]
+    q_obs = q_obs[mask]
+
+    if len(q_obs) == 0:
+        raise ValueError("No valid observations found after filtering NaNs.")
+
     q0 = q_obs[0]
-    # 2. Setup Configuration
+
+    # --------------------------------------------------------
+    # 2. Base configuration
+    # --------------------------------------------------------
     base_cfg = StoHyMoLAPConfig(
-        a=1.0, b=20.0, theta=0.05, dt=1.0,
-        noise_type="gaussian", random_seed=123
+        a=1.0,
+        b=20.0,
+        theta=0.02,
+        dt=1.0,
+        noise_type="gaussian",   # change to "gaussian" or "levy"
+        alpha_levy=1.8,
+        beta_levy=0.0,
+        levy_scale=0.01,
+        q_min=1e-8,
+        n_substeps=8,
+        levy_clip=5.0,
+        random_seed=123
     )
 
-    bounds_abtheta = [(0.6, 2.0), (1.0, 40.0), (0.001, 0.3)]
+    bounds_abtheta = [
+        (0.6, 2.0),     # a
+        (1.0, 40.0),    # b
+        (0.001, 0.05)   # theta
+    ]
 
-    # 3. Run Differential Evolution
-    print("Starting optimization...")
-    result_abtheta = differential_evolution(
-        objective_abtheta,
-        bounds=bounds_abtheta,
-        args=(psi_obs, q_obs, q_obs[0], base_cfg, "nse", 40),
-        seed=123,
-        maxiter=20,
-        polish=True,
-        workers=-1,          # Now safe to use parallel cores
-        updating='deferred'  
+    # --------------------------------------------------------
+    # 3. General multiobjective calibration
+    # --------------------------------------------------------
+    print("Starting multiobjective calibration...")
+
+    metrics = ["nse", "kge", "rmse"]
+
+    weight_sets = [
+        [0.60, 0.20, 0.20],
+        [0.50, 0.25, 0.25],
+        [0.40, 0.30, 0.30],
+        [0.34, 0.33, 0.33],
+        [0.20, 0.40, 0.40],
+        [0.20, 0.60, 0.20],
+        [0.70, 0.15, 0.15]
+    ]
+
+    all_df, pareto_df = calibrate_pareto_by_weight_scan(
+        psi=psi_obs,
+        q_obs=q_obs,
+        q0=q0,
+        base_config=base_cfg,
+        bounds_abtheta=bounds_abtheta,
+        metrics=metrics,
+        weight_sets=weight_sets,
+        n_members_calibration=40,
+        n_members_refit=100,
+        summary_method="median",
+        maxiter=25,
+        popsize=12,
+        seed=123
     )
 
-    # 4. Results & Plotting
-    best_a2, best_b2, best_theta2 = result_abtheta.x
-    q_cal_abtheta = simulate_mean_response(psi_obs, q_obs[0], 
-                                          {"a": best_a2, "b": best_b2, "theta": best_theta2}, 
-                                          base_cfg, 100)
+    print("\nAll candidate solutions:")
+    cols_show = ["a", "b", "theta"] + metrics + [f"w_{m}" for m in metrics] + ["weighted_obj"]
+    print(all_df[cols_show])
 
-    print(f"\nBest Parameters: a={best_a2:.4f}, b={best_b2:.4f}, theta={best_theta2:.4f}")
-    print(f"Best NSE: {-result_abtheta.fun:.4f}")
+    print("\nPareto front:")
+    print(pareto_df[cols_show])
 
+    # --------------------------------------------------------
+    # 4. Choose best compromise from Pareto front
+    # --------------------------------------------------------
+    pareto_df = add_distance_to_ideal(pareto_df, metrics=metrics)
+    best_compromise = pareto_df.loc[pareto_df["distance_to_ideal"].idxmin()]
+
+    print("\nBest compromise solution:")
+    print(best_compromise[["a", "b", "theta"] + metrics + ["distance_to_ideal"]])
+
+    best_a = float(best_compromise["a"])
+    best_b = float(best_compromise["b"])
+    best_theta = float(best_compromise["theta"])
+
+    # --------------------------------------------------------
+    # 5. Final simulation
+    # --------------------------------------------------------
+    q_cal_pareto = simulate_mean_response(
+        psi=psi_obs,
+        q0=q0,
+        params={"a": best_a, "b": best_b, "theta": best_theta},
+        base_config=base_cfg,
+        n_members=100,
+        summary_method="median"
+    )
+
+    # --------------------------------------------------------
+    # 6. Pareto plot
+    # --------------------------------------------------------
+    # Solo funciona si metrics tiene exactamente 2 objetivos
+    # plot_pareto_front(all_df, pareto_df, metrics=metrics)
+
+    # --------------------------------------------------------
+    # 7. Final observed vs simulated plot
+    # --------------------------------------------------------
     plt.figure(figsize=(12, 5))
-    plt.plot(q_obs, label="Observed", color='black', alpha=0.6)
-    plt.plot(q_cal_abtheta, label="Calibrated Mean", color='red', linewidth=1.5)
+    plt.plot(q_obs, label="Observed", color="black", alpha=0.6)
+    plt.plot(q_cal_pareto, label="Best Pareto compromise", color="red", linewidth=1.5)
     plt.legend()
-    plt.title("Stochastic Calibration Results")
+    plt.title(f"Stochastic Calibration Results ({base_cfg.noise_type.capitalize()} noise)")
+    plt.tight_layout()
     plt.show()
+
+    # --------------------------------------------------------
+    # 8. Final metrics
+    # --------------------------------------------------------
+    print("\nFinal performance of best Pareto compromise:")
+    print(f"NSE   = {nse(q_obs, q_cal_pareto):.4f}")
+    print(f"KGE   = {kge(q_obs, q_cal_pareto):.4f}")
+    print(f"RMSE  = {rmse(q_obs, q_cal_pareto):.4f}")
+    print(f"PBIAS = {pbias(q_obs, q_cal_pareto):.2f}")

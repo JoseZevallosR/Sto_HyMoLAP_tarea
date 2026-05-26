@@ -1,0 +1,53 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def plot_hydrograph_with_ci(
+    discharge: np.ndarray,
+    precip: np.ndarray,
+    qmean: np.ndarray,
+    qinf: np.ndarray,
+    qsup: np.ndarray,
+    title: str,
+    output_path: str
+):
+    discharge = np.asarray(discharge, dtype=float)
+    precip = np.asarray(precip, dtype=float)
+    qmean = np.asarray(qmean, dtype=float)
+    qinf = np.asarray(qinf, dtype=float)
+    qsup = np.asarray(qsup, dtype=float)
+
+    t = np.arange(len(discharge))
+
+    fig, ax1 = plt.subplots(figsize=(13, 6))
+
+    ax1.bar(t, precip, color="black", alpha=0.50, label="Precipitación")
+    ax1.set_ylabel("Precipitación")
+    ax1.invert_yaxis()
+    ax1.grid(alpha=0.25)
+
+    ax2 = ax1.twinx()
+
+    ax2.plot(t, discharge, color="blue", linewidth=1.2, label="Qobs")
+    ax2.fill_between(
+        t,
+        qinf,
+        qsup,
+        color="gray",
+        alpha=0.30,
+        label="IC 95%"
+    )
+    ax2.plot(t, qmean, color="red", linewidth=1.4, label="Qmean/Qsim")
+
+    ax2.set_ylabel("Caudal")
+    ax1.set_xlabel("Paso de tiempo")
+
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+
+    ax2.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
+
+    plt.title(title)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.show()
