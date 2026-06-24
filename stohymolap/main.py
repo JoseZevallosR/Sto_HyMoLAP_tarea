@@ -13,7 +13,7 @@ from plots import plot_hydrograph_with_ci
 def main():
 
     config = PaperHyMoLAPConfig(
-        data_path="../ramis_hydro.csv",
+        data_path="../data/ramis_hydro.csv",
         csv_sep=",",
 
         latitude_deg=-15.0,
