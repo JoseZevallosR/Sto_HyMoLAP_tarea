@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 from config import PaperHyMoLAPConfig
-from data_io import load_hydrological_data
+from data_io import load_ramis_hydro
 from diagnostics import print_basic_statistics
 from calibration import calibrate_paper_heuristic
 from validation import run_validation
@@ -13,15 +13,32 @@ from plots import plot_hydrograph_with_ci
 def main():
 
     config = PaperHyMoLAPConfig(
-        data_path="../data.csv",
+        data_path="../ramis_hydro.csv",
+        csv_sep=",",
 
+        latitude_deg=-15.0,
+        fill_obs_with_sim=True,
+
+        # 70% de la serie para calibrar (pon None para usar train_size=1461).
+        train_fraction=0.7,
+
+        # Rangos de búsqueda para los parámetros de Lévy (se calibran).
+        alpha_bounds=(1.1, 1.9),
+        beta_bounds=(-1.0, 0.0),
+        cal_select_top_frac=0.1,
+
+        # Valores del paper como referencia inicial (serán sobrescritos por
+        # los calibrados antes de la validación).
+        alpha_levy=1.3,
+        beta_levy=-0.8,
+
+        # OJO: con una serie de calibración larga conviene bajar estos números
+        # para que el tiempo no se dispare (la simulación escala con la longitud).
+        # Ej. equilibrado: max_traj_cal=300, n_param_samples=3000.
         max_traj_cal=1000,
         n_param_samples=5000,
         n_traj_validation=50000,
         validation_chunk_size=2000,
-
-        alpha_levy=1.3,
-        beta_levy=-0.8,
 
         mu_bounds=(0.75, 0.95),
         lambda_bounds=(2.0, 3.4),
@@ -34,7 +51,7 @@ def main():
 
     os.makedirs(config.output_dir, exist_ok=True)
 
-    discharge_all, precip_all, pet_all, peff_all = load_hydrological_data(config)
+    discharge_all, precip_all, pet_all, peff_all, dates_all = load_ramis_hydro(config)
 
     print_basic_statistics(
         discharge=discharge_all,
@@ -44,15 +61,23 @@ def main():
     )
 
     n_total = len(discharge_all)
-    n_train = min(config.train_size, n_total)
+
+    # División calibración / validación
+    if config.train_fraction is not None:
+        n_train = int(round(n_total * config.train_fraction))
+    else:
+        n_train = config.train_size
+    n_train = max(2, min(n_train, n_total - 1))
 
     discharge_train = discharge_all[:n_train]
     precip_train = precip_all[:n_train]
     peff_train = peff_all[:n_train]
+    dates_train = dates_all[:n_train]
 
     discharge_valid = discharge_all[n_train:]
     precip_valid = precip_all[n_train:]
     peff_valid = peff_all[n_train:]
+    dates_valid = dates_all[n_train:]
 
     print("=" * 72)
     print("DATOS CARGADOS")
@@ -74,12 +99,22 @@ def main():
     mean_mu = cal_results["mean_mu"]
     mean_lambda = cal_results["mean_lambda"]
     mean_sigma = cal_results["mean_sigma"]
+    mean_alpha = cal_results["mean_alpha"]
+    mean_beta = cal_results["mean_beta"]
+
+    # Los parámetros Lévy calibrados sustituyen a los del paper para que la
+    # validación (que lee config.alpha_levy / config.beta_levy) los use.
+    config.alpha_levy = mean_alpha
+    config.beta_levy = mean_beta
 
     print("\n" + "=" * 72)
     print("RESULTADOS DE CALIBRACIÓN")
+    print(f"  (parámetros estimados sobre las {cal_results['n_top']} mejores trayectorias)")
     print(f"  mean_MU     = {mean_mu:.6f}")
     print(f"  mean_LAMBDA = {mean_lambda:.6f}")
     print(f"  mean_SIGMA  = {mean_sigma:.8f}")
+    print(f"  mean_ALPHA  = {mean_alpha:.6f}   (Lévy)")
+    print(f"  mean_BETA   = {mean_beta:.6f}   (Lévy)")
     print("\nMétricas con trayectoria media")
     print(f"  NSE   = {cal_results['metrics']['NSE']:.4f}")
     print(f"  KGE   = {cal_results['metrics']['KGE']:.4f}")
@@ -91,6 +126,8 @@ def main():
         "mu": cal_results["mu_best"],
         "lambda": cal_results["lambda_best"],
         "sigma": cal_results["sigma_best"],
+        "alpha_levy": cal_results["alpha_best"],
+        "beta_levy": cal_results["beta_best"],
         "nse_best": cal_results["nse_best"]
     })
 
@@ -124,8 +161,9 @@ def main():
         qmean=cal_results["mean_trajectory"],
         qinf=cal_results["inf_trajectory"],
         qsup=cal_results["sup_trajectory"],
+        dates=dates_train,
         title=(
-            "StoHyMoLAP calibración - versión fiel al paper\n"
+            "StoHyMoLAP calibración - alpha/beta Lévy calibrados\n"
             f"NSE={cal_results['metrics']['NSE']:.3f}, "
             f"KGE={cal_results['metrics']['KGE']:.3f}, "
             f"PBIAS={cal_results['metrics']['PBIAS']:.1f}%"
@@ -137,7 +175,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 2. Validación
+    # 2. Validación (usa alpha/beta calibrados vía config)
     # --------------------------------------------------------
 
     valid_results = run_validation(
@@ -180,8 +218,9 @@ def main():
             qmean=valid_results["mean_valid"],
             qinf=valid_results["inf_valid"],
             qsup=valid_results["sup_valid"],
+            dates=dates_valid,
             title=(
-                "StoHyMoLAP validación - versión fiel al paper\n"
+                "StoHyMoLAP validación - alpha/beta Lévy calibrados\n"
                 f"NSE={valid_metrics['NSE']:.3f}, "
                 f"KGE={valid_metrics['KGE']:.3f}, "
                 f"PBIAS={valid_metrics['PBIAS']:.1f}%"

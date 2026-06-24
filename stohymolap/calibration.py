@@ -11,7 +11,7 @@ from model import state_basin_vectorized
 def simulate_candidates_paper(
     mu, lambda_, sigma, peff, q0,
     levy_values,
-    alpha_area,           # ← NUEVO: factor de escala Peff→Q
+    alpha_area,           # factor de escala Peff→Q
     clamp_negative_q=True
 ):
     mu          = np.asarray(mu,          dtype=float)
@@ -47,7 +47,7 @@ def simulate_candidates_paper(
         qsim[:, k] = (
             q_prev
             - ratio     * q_power
-            + inv_lambda * x_state[:, k-1] * alpha_area   # ← escala aplicada
+            + inv_lambda * x_state[:, k-1] * alpha_area   # escala aplicada
             + sigma     * q_prev * dlev[k-1]
         )
 
@@ -73,28 +73,40 @@ def calibrate_paper_heuristic(discharge, peff, config):
     q0  = discharge[0]
     rng = np.random.default_rng(config.random_seed)
 
-    sig_best    = np.zeros(config.max_traj_cal, dtype=float)
-    mu_best     = np.zeros(config.max_traj_cal, dtype=float)
-    lambda_best = np.zeros(config.max_traj_cal, dtype=float)
-    nse_best    = np.zeros(config.max_traj_cal, dtype=float)
-    qq_best     = np.zeros((n, config.max_traj_cal), dtype=float)
+    T = config.max_traj_cal
+
+    sig_best    = np.zeros(T, dtype=float)
+    mu_best     = np.zeros(T, dtype=float)
+    lambda_best = np.zeros(T, dtype=float)
+    alpha_best  = np.zeros(T, dtype=float)   # NUEVO: alpha Lévy por trayectoria
+    beta_best   = np.zeros(T, dtype=float)   # NUEVO: beta  Lévy por trayectoria
+    nse_best    = np.zeros(T, dtype=float)
+    qq_best     = np.zeros((n, T), dtype=float)
 
     start_time = time.time()
 
     print("=" * 72)
-    print("CALIBRACIÓN HEURÍSTICA STO-HYMOLAP")
-    print(f"  alpha Lévy        = {config.alpha_levy}")
-    print(f"  beta Lévy         = {config.beta_levy}")
+    print("CALIBRACIÓN HEURÍSTICA STO-HYMOLAP (alpha/beta Lévy calibrados)")
+    print(f"  alpha Lévy bounds = {config.alpha_bounds}")
+    print(f"  beta  Lévy bounds = {config.beta_bounds}")
     print(f"  trayectorias      = {config.max_traj_cal}")
     print(f"  candidatos/tray.  = {config.n_param_samples}")
     print(f"  longitud serie    = {n}")
     print(f"  alpha_area        = {alpha_area:.4f}")
+    print(f"  top frac selección= {config.cal_select_top_frac}")
     print("=" * 72, flush=True)
 
-    for traj in range(config.max_traj_cal):
+    for traj in range(T):
+
+        # NUEVO: cada trayectoria sortea sus propios alpha y beta de Lévy.
+        # El ruido estable depende de ellos, por eso se fijan por trayectoria
+        # (todos los candidatos mu/lambda/sigma comparten esta realización).
+        alpha_traj = rng.uniform(config.alpha_bounds[0], config.alpha_bounds[1])
+        beta_traj  = rng.uniform(config.beta_bounds[0],  config.beta_bounds[1])
+
         lev = stable_rvs_cms(
-            alpha=config.alpha_levy,
-            beta=config.beta_levy,
+            alpha=alpha_traj,
+            beta=beta_traj,
             loc=0.0,
             scale=1.0,
             size=n,
@@ -140,6 +152,8 @@ def calibrate_paper_heuristic(discharge, peff, config):
         mu_best[traj]     = mu_candidates[idx_best]
         lambda_best[traj] = lambda_candidates[idx_best]
         sig_best[traj]    = sigma_candidates[idx_best]
+        alpha_best[traj]  = alpha_traj
+        beta_best[traj]   = beta_traj
         nse_best[traj]    = scores[idx_best]
         qq_best[:, traj]  = q_candidates[idx_best, :]
 
@@ -151,15 +165,34 @@ def calibrate_paper_heuristic(discharge, peff, config):
                 f"NSE mejor={nse_best[traj]:.4f} | "
                 f"mu={mu_best[traj]:.4f}, "
                 f"lambda={lambda_best[traj]:.4f}, "
-                f"sigma={sig_best[traj]:.6f} | "
+                f"sigma={sig_best[traj]:.6f}, "
+                f"alpha={alpha_best[traj]:.4f}, "
+                f"beta={beta_best[traj]:.4f} | "
                 f"tiempo={elapsed:.1f}s",
                 flush=True
             )
 
-    mean_mu     = float(np.mean(mu_best))
-    mean_lambda = float(np.mean(lambda_best))
-    mean_sigma  = float(np.mean(sig_best))
+    # ------------------------------------------------------------------
+    # Estimación de parámetros calibrados.
+    # Para que alpha/beta queden CALIBRADOS (y no en el centro del rango),
+    # se promedia solo sobre las trayectorias con mejor NSE (top-K). El mismo
+    # subconjunto se usa para los cinco parámetros, de modo que sean coherentes.
+    # ------------------------------------------------------------------
+    top_frac = float(getattr(config, "cal_select_top_frac", 1.0))
+    top_frac = min(max(top_frac, 0.0), 1.0)
+    k = max(1, int(round(T * top_frac)))
 
+    finite = np.isfinite(nse_best)
+    order = np.argsort(np.where(finite, nse_best, -np.inf))[::-1]
+    top_idx = order[:k]
+
+    mean_mu     = float(np.mean(mu_best[top_idx]))
+    mean_lambda = float(np.mean(lambda_best[top_idx]))
+    mean_sigma  = float(np.mean(sig_best[top_idx]))
+    mean_alpha  = float(np.mean(alpha_best[top_idx]))   # NUEVO
+    mean_beta   = float(np.mean(beta_best[top_idx]))    # NUEVO
+
+    # Bandas de incertidumbre: se usan TODAS las trayectorias (espectro completo).
     mean_trajectory = np.mean(qq_best, axis=1)
     inf_trajectory  = np.percentile(qq_best, 2.5,  axis=1)
     sup_trajectory  = np.percentile(qq_best, 97.5, axis=1)
@@ -175,10 +208,15 @@ def calibrate_paper_heuristic(discharge, peff, config):
         "mean_mu":        mean_mu,
         "mean_lambda":    mean_lambda,
         "mean_sigma":     mean_sigma,
+        "mean_alpha":     mean_alpha,     # NUEVO
+        "mean_beta":      mean_beta,      # NUEVO
         "mu_best":        mu_best,
         "lambda_best":    lambda_best,
         "sigma_best":     sig_best,
+        "alpha_best":     alpha_best,     # NUEVO
+        "beta_best":      beta_best,      # NUEVO
         "nse_best":       nse_best,
+        "n_top":          k,              # NUEVO: nº de trayectorias usadas
         "qq_best":        qq_best,
         "mean_trajectory":mean_trajectory,
         "inf_trajectory": inf_trajectory,
