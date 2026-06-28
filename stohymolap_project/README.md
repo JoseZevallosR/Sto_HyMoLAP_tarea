@@ -249,3 +249,39 @@ Además, cada corrida nueva guarda en el directorio de cada experimento:
 - `ml_backend.json`
 - `regime_thresholds.json`
 - `leakage_manifest.json`
+
+## Fase 3.4B — Figuras paper-ready
+
+La Fase 3.4B agrega un generador reproducible de figuras de validación sobre la
+misma ventana común usada por `outputs/comparison/leaderboard_common_intersection.csv`.
+No agrega dependencias pesadas: usa `matplotlib`, `pandas` y `numpy`.
+
+Uso recomendado después de correr la matriz E0-E8 y la auditoría Fase 3.4A:
+
+```bash
+python scripts/generate_phase34_figures.py --output-root outputs
+```
+
+Artefactos generados en `outputs/figures/phase34/`:
+
+- `hydrograph_validation_common.png`: hidrograma de validación para
+  `E0_RAMIS_DET_NOBF`, `E1_RAMIS_DET_BF`, `E3_RAMIS_LEVY_BF`,
+  `E4_ML_PURE_XGB`, `E6_HYB_XGB_QUANTILES` y `E8_HYB_GRU_QUANTILES`.
+- `fdc_common.png`: curva de duración de caudales comparando `Qobs` y `Qsim`.
+- `scatter_<EXPERIMENT>.png`: diagramas `Qobs`-`Qsim` por experimento.
+- `residuals_by_regime_<EXPERIMENT>.png`: residuos por régimen hidrológico,
+  usando `regime_thresholds.json` cuando está disponible.
+- `physical_components_<EXPERIMENT>.png`: componentes `Qfast`, `Qbase` y
+  `Qtotal` solo si existen en `predictions_validation.csv`; si no existen,
+  el script no falla y registra la omisión en el manifest.
+- `stochastic_reference_E2_E3.png`: referencia estocástica E2/E3. Si no existen
+  columnas de banda inferior/superior, se genera una figura fallback con las
+  trayectorias puntuales y una advertencia de subdispersión cuando
+  `uncertainty_comparison.csv` lo indica.
+- `phase34_figure_manifest.csv` y `phase34_figure_manifest.json`: inventario de
+  figuras, estado (`generated`, `fallback`, `skipped`, `warning`), columnas
+  requeridas, columnas faltantes, advertencias y notas.
+
+Nota de redacción científica: `E7_HYB_GRU_MEAN` y `E8_HYB_GRU_QUANTILES` deben
+reportarse según el backend real de `ml_backend.json`. Si el backend es
+`fallback_mlp_on_flattened_sequences`, no deben describirse como GRU real.
