@@ -18,7 +18,7 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from ..metrics.deterministic import nse, kge, pbias
+from ..metrics.deterministic import nse, kge, pbias, nse_vectorized, kge_vectorized, pbias_vectorized
 from ..metrics.uncertainty import picp
 
 DEFAULT_WEIGHTS = {"nse": 0.40, "kge": 0.30, "pbias": 0.15, "coverage": 0.15}
@@ -71,4 +71,52 @@ def objective_value(
         "KGE": float(kge_v),
         "PBIAS": float(pbias_v),
         "PICP": float(picp_v) if np.isfinite(picp_v) else np.nan,
+    }
+
+
+def objective_value_vectorized(
+    obs: np.ndarray,
+    sim_matrix: np.ndarray,
+    *,
+    weights: Optional[Dict[str, float]] = None,
+) -> Dict[str, np.ndarray]:
+    """Calcula J sin cobertura para muchas simulaciones.
+
+    Esta funcion se usa dentro de la calibracion para escoger el mejor
+    candidato de parametros con la misma funcion objetivo que se usa para
+    ordenar trayectorias. Antes se escogia el candidato por NSE puro y solo
+    despues se calculaba J; eso podia desalinear la calibracion cuando los
+    pesos daban importancia a KGE o PBIAS.
+    """
+    sims = np.asarray(sim_matrix, dtype=float)
+    w = dict(DEFAULT_WEIGHTS)
+    if weights:
+        w.update(weights)
+
+    nse_v = nse_vectorized(obs, sims)
+    kge_v = kge_vectorized(obs, sims)
+    pbias_v = pbias_vectorized(obs, sims)
+
+    nse_for_j = np.where(np.isfinite(nse_v), nse_v, -1.0)
+    kge_for_j = np.where(np.isfinite(kge_v), kge_v, -1.0)
+    pbias_for_j = np.where(np.isfinite(pbias_v), pbias_v, 100.0)
+
+    active_weight = float(w["nse"] + w["kge"] + w["pbias"])
+    if active_weight <= 0:
+        raise ValueError("Los pesos nse+kge+pbias deben sumar más que cero para calibrar candidatos.")
+
+    J = (
+        w["nse"] * (1.0 - nse_for_j)
+        + w["kge"] * (1.0 - kge_for_j)
+        + w["pbias"] * np.abs(pbias_for_j / 100.0)
+    ) / active_weight
+
+    nonfinite_sim = ~np.all(np.isfinite(sims[:, np.isfinite(np.asarray(obs, dtype=float))]), axis=1)
+    J[nonfinite_sim] = np.inf
+
+    return {
+        "J": J.astype(float),
+        "NSE": nse_v.astype(float),
+        "KGE": kge_v.astype(float),
+        "PBIAS": pbias_v.astype(float),
     }

@@ -51,6 +51,62 @@ def nse_vectorized(obs: np.ndarray, sim_matrix: np.ndarray) -> np.ndarray:
     return out
 
 
+def kge_vectorized(obs: np.ndarray, sim_matrix: np.ndarray) -> np.ndarray:
+    """KGE para muchas simulaciones (n_sim, n_tiempos).
+
+    Evalua solo contra observaciones finitas y marca con ``-inf`` las filas
+    simuladas no finitas o degeneradas. Usa la misma formulacion que ``kge``.
+    """
+    obs = np.asarray(obs, dtype=float)
+    sim_matrix = np.asarray(sim_matrix, dtype=float)
+    obs_mask = np.isfinite(obs)
+    if obs_mask.sum() < 2:
+        return np.full(sim_matrix.shape[0], -np.inf)
+
+    obs_valid = obs[obs_mask]
+    sim_valid = sim_matrix[:, obs_mask]
+    finite_rows = np.all(np.isfinite(sim_valid), axis=1)
+
+    mean_obs = np.mean(obs_valid)
+    std_obs = np.std(obs_valid, ddof=1)
+    if std_obs == 0 or mean_obs == 0:
+        return np.full(sim_matrix.shape[0], -np.inf)
+
+    mean_sim = np.mean(sim_valid, axis=1)
+    std_sim = np.std(sim_valid, axis=1, ddof=1)
+    centered_obs = obs_valid - mean_obs
+    centered_sim = sim_valid - mean_sim[:, None]
+    cov = np.sum(centered_sim * centered_obs[None, :], axis=1) / (len(obs_valid) - 1)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        r = cov / (std_sim * std_obs)
+        alpha = std_sim / std_obs
+        beta = mean_sim / mean_obs
+        out = 1.0 - np.sqrt((r - 1.0) ** 2 + (alpha - 1.0) ** 2 + (beta - 1.0) ** 2)
+
+    bad = (~finite_rows) | (~np.isfinite(out)) | (std_sim == 0)
+    out[bad] = -np.inf
+    return out
+
+
+def pbias_vectorized(obs: np.ndarray, sim_matrix: np.ndarray) -> np.ndarray:
+    """PBIAS (%) para muchas simulaciones (n_sim, n_tiempos)."""
+    obs = np.asarray(obs, dtype=float)
+    sim_matrix = np.asarray(sim_matrix, dtype=float)
+    obs_mask = np.isfinite(obs)
+    if obs_mask.sum() == 0:
+        return np.full(sim_matrix.shape[0], np.inf)
+    obs_valid = obs[obs_mask]
+    sim_valid = sim_matrix[:, obs_mask]
+    denom = np.sum(obs_valid)
+    if denom == 0:
+        return np.full(sim_matrix.shape[0], np.inf)
+    finite_rows = np.all(np.isfinite(sim_valid), axis=1)
+    out = 100.0 * np.sum(sim_valid - obs_valid[None, :], axis=1) / denom
+    out[~finite_rows] = np.inf
+    return out
+
+
 def rmse(obs: np.ndarray, sim: np.ndarray) -> float:
     obs, sim = _clean(obs, sim)
     if len(obs) == 0:

@@ -295,3 +295,53 @@ def test_ramis_rejects_unstable_parameter_bounds():
         assert "inestables" in str(exc) or "mu/lambda" in str(exc)
         return
     raise AssertionError("No rechazo bounds RAMIS inestables.")
+
+
+def test_vectorized_objective_can_select_by_pbias_not_nse():
+    from stohymolap.calibration.objective import objective_value_vectorized
+
+    obs = np.array([1.0, 2.0, 3.0, 4.0])
+    # sim_a conserva mejor la forma, pero tiene sesgo positivo claro.
+    # sim_b tiene peor forma, pero balance volumetrico perfecto.
+    sims = np.array([
+        [2.0, 3.0, 4.0, 5.0],
+        [4.0, 1.0, 2.0, 3.0],
+    ])
+    obj = objective_value_vectorized(
+        obs, sims, weights={"nse": 0.0, "kge": 0.0, "pbias": 1.0}
+    )
+
+    assert int(np.nanargmin(obj["J"])) == 1
+    assert abs(obj["PBIAS"][1]) < abs(obj["PBIAS"][0])
+
+
+def test_calibration_selects_best_j_row_instead_of_top_k_mean():
+    from stohymolap.calibration.monte_carlo_search import calibrate
+
+    rng = np.random.default_rng(321)
+    n = 90
+    peff = np.clip(rng.gamma(1.4, 2.0, n) * (rng.random(n) < 0.4), 0, None)
+    discharge = np.clip(0.3 + np.convolve(peff, [0.20, 0.10, 0.04], mode="same"), 0, None)
+    bounds = {
+        "mu": (0.75, 0.95),
+        "lambda": (2.0, 3.4),
+        "sigma": (0.0, 0.0),
+        "alpha": (1.1, 1.9),
+        "beta": (-1.0, 0.0),
+        "c_r": (0.0, 0.2),
+        "k_b": (0.05, 0.3),
+        "S0_b": (0.0, 2.0),
+    }
+
+    result = calibrate(
+        discharge, peff, bounds=bounds,
+        n_traj=6, n_param_samples=10, top_frac=1.0, seed=11,
+        use_baseflow=True, calibrate_baseflow=True, use_stochastic=False,
+        parameter_selection="best_j",
+    )
+
+    assert result.best_params["selection_strategy"] == "best_j"
+    assert result.best_params["selected_rank"] == 1
+    assert np.isclose(result.best_params["mu"], result.top_k_table[0, 0])
+    assert np.isclose(result.best_params["selected_J"], result.top_k_table[0, 9])
+    assert bool(result.top_k_table[0, -1])

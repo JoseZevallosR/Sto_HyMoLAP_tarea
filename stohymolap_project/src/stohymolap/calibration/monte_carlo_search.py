@@ -13,9 +13,10 @@ extensiones:
    trayectorias se elige por el menor ``J`` (no por NSE puro), de modo que la
    eleccion respete tambien KGE, PBIAS y, cuando aplica, la cobertura.
 
-La pantalla por-candidato dentro de cada trayectoria sigue usando NSE
-vectorizado (rapido) para escoger el mejor mu/lambda/sigma; el costo de evaluar
-J completo se reserva para el ranking entre trayectorias.
+La pantalla por-candidato dentro de cada trayectoria usa ahora el mismo J
+multiobjetivo vectorizado (NSE/KGE/PBIAS) que el ranking top-K; asi los
+parametros calibrados, seleccionados y evaluados responden a la misma funcion
+objetivo.
 """
 from __future__ import annotations
 
@@ -24,10 +25,9 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
-from .objective import objective_value
+from .objective import objective_value, objective_value_vectorized
 from ..hydro.baseflow import BaseflowParams, add_baseflow, quickflow_initial_from_total
 from ..hydro.ramis import simulate_fast_candidates, validate_ramis_bounds
-from ..metrics.deterministic import nse_vectorized
 from ..stochastic.levy import stable_rvs_cms
 from ..utils.logging import get_logger
 
@@ -71,6 +71,7 @@ def calibrate(
     calibrate_baseflow: bool = False,
     use_stochastic: bool = True,
     objective_weights: Optional[Dict[str, float]] = None,
+    parameter_selection: str = "best_j",
     clamp_negative_q: bool = True,
 ) -> CalibrationResult:
     """Ejecuta la calibracion Monte Carlo.
@@ -82,6 +83,12 @@ def calibrate(
     parametros Levy: ``sigma`` se fija en 0 y la serie Levy se fija en cero.
     Esto evita calibrar un modelo ruidoso y evaluar luego un modelo
     deterministico distinto.
+
+    ``parameter_selection`` controla que parametros se devuelven como
+    ``best_params``:
+
+    - ``best_j`` (por defecto): usa la mejor trayectoria individual por J.
+    - ``top_k_mean``: conserva el comportamiento heredado de promediar el top-K.
     """
     discharge = np.asarray(discharge, dtype=float)
     peff = np.asarray(peff, dtype=float)
@@ -96,13 +103,20 @@ def calibrate(
     n = len(discharge)
     q0 = float(discharge[np.argmax(valid_obs)])
     validate_ramis_bounds(bounds)
+    parameter_selection = str(parameter_selection).lower().strip()
+    if parameter_selection not in {"best_j", "top_k_mean"}:
+        raise ValueError(
+            "parameter_selection debe ser 'best_j' o 'top_k_mean', "
+            f"recibido: {parameter_selection!r}"
+        )
+
     rng = np.random.default_rng(seed)
     alpha_area = _alpha_area(discharge, peff)
 
     T = int(n_traj)
     store = {
         k: np.zeros(T) for k in
-        ["mu", "lambda", "sigma", "alpha", "beta", "c_r", "k_b", "S0_b", "nse", "J"]
+        ["mu", "lambda", "sigma", "alpha", "beta", "c_r", "k_b", "S0_b", "nse", "KGE", "PBIAS", "J"]
     }
     qq_best = np.zeros((n, T), dtype=float)
 
@@ -168,15 +182,19 @@ def calibrate(
         else:
             q_total = q_fast
 
-        scores = nse_vectorized(discharge, q_total)
-        if np.all(~np.isfinite(scores)):
+        candidate_obj = objective_value_vectorized(
+            discharge, q_total, weights=objective_weights
+        )
+        candidate_J = candidate_obj["J"]
+        if np.all(~np.isfinite(candidate_J)):
             raise RuntimeError(f"Todas las simulaciones fallaron (traj {traj}).")
-        idx = int(np.nanargmax(scores))
+        idx = int(np.nanargmin(candidate_J))
 
         best_series = q_total[idx, :]
         qq_best[:, traj] = best_series
 
-        # J por trayectoria (sin termino de cobertura: serie unica).
+        # J por trayectoria recalculado con la funcion escalar para mantener
+        # una salida comparable con las metricas reportadas.
         jval = objective_value(discharge, best_series, weights=objective_weights)
 
         store["mu"][traj] = mu_c[idx]
@@ -187,7 +205,9 @@ def calibrate(
         store["c_r"][traj] = bf.c_r
         store["k_b"][traj] = bf.k_b
         store["S0_b"][traj] = bf.S0_b if bf.S0_b is not None else np.nan
-        store["nse"][traj] = scores[idx]
+        store["nse"][traj] = jval["NSE"]
+        store["KGE"][traj] = jval["KGE"]
+        store["PBIAS"][traj] = jval["PBIAS"]
         store["J"][traj] = jval["J"]
 
         if (traj + 1) % max(1, T // 10) == 0 or traj == 0:
@@ -201,16 +221,33 @@ def calibrate(
     order = np.argsort(np.where(finite, store["J"], np.inf))  # menor J primero
     top_idx = order[:k]
 
+    param_names = ["mu", "lambda", "sigma", "alpha", "beta", "c_r", "k_b", "S0_b"]
+    top_k_mean_params = {
+        name: float(np.nanmean(store[name][top_idx])) for name in param_names
+    }
+    best_idx = int(top_idx[0])
+    best_j_params = {name: float(store[name][best_idx]) for name in param_names}
+
+    if parameter_selection == "top_k_mean":
+        selected_params = dict(top_k_mean_params)
+        selected_rank = 0  # 0 indica que no es una fila individual, sino promedio top-K.
+        selected_source_idx = -1
+        selected_J = float(np.nanmean(store["J"][top_idx]))
+        selected_nse = float(np.nanmean(store["nse"][top_idx]))
+    else:
+        selected_params = dict(best_j_params)
+        selected_rank = 1
+        selected_source_idx = best_idx
+        selected_J = float(store["J"][best_idx])
+        selected_nse = float(store["nse"][best_idx])
+
     best_params = {
-        "mu": float(np.mean(store["mu"][top_idx])),
-        "lambda": float(np.mean(store["lambda"][top_idx])),
-        "sigma": float(np.mean(store["sigma"][top_idx])),
-        "alpha": float(np.mean(store["alpha"][top_idx])),
-        "beta": float(np.mean(store["beta"][top_idx])),
-        "c_r": float(np.mean(store["c_r"][top_idx])),
-        "k_b": float(np.mean(store["k_b"][top_idx])),
-        "S0_b": float(np.nanmean(store["S0_b"][top_idx])),
+        **selected_params,
         "n_top": int(k),
+        "selection_strategy": parameter_selection,
+        "selected_rank": int(selected_rank),
+        "selected_J": selected_J,
+        "selected_NSE": selected_nse,
     }
 
     # Bandas/resumen con TODAS las trayectorias (espectro completo).
@@ -223,11 +260,14 @@ def calibrate(
         weights=objective_weights,
     )
 
+    ranks = np.arange(1, len(top_idx) + 1, dtype=float)
+    selected_flag = (top_idx == selected_source_idx).astype(float)
     top_table = np.column_stack([
         store["mu"][top_idx], store["lambda"][top_idx], store["sigma"][top_idx],
         store["alpha"][top_idx], store["beta"][top_idx], store["c_r"][top_idx],
         store["k_b"][top_idx], store["S0_b"][top_idx], store["nse"][top_idx],
-        store["J"][top_idx],
+        store["J"][top_idx], store["KGE"][top_idx], store["PBIAS"][top_idx],
+        ranks, selected_flag,
     ])
 
     return CalibrationResult(
@@ -239,5 +279,13 @@ def calibrate(
         sup_trajectory=sup_traj,
         alpha_area=alpha_area,
         metrics=metrics,
-        diagnostics={"store": store, "top_idx": top_idx, "use_stochastic": use_stochastic},
+        diagnostics={
+            "store": store,
+            "top_idx": top_idx,
+            "use_stochastic": use_stochastic,
+            "parameter_selection": parameter_selection,
+            "selected_source_idx": selected_source_idx,
+            "best_j_params": best_j_params,
+            "top_k_mean_params": top_k_mean_params,
+        },
     )

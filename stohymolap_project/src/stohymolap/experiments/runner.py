@@ -149,6 +149,7 @@ class ExperimentRunner:
             calibrate_baseflow=bool(self.ec.baseflow.get("calibrate", False)),
             use_stochastic=self.ec.use_stochastic,
             objective_weights=weights,
+            parameter_selection=cal.get("parameter_selection", "best_j"),
         )
         self.cal_result = result
         bp = result.best_params

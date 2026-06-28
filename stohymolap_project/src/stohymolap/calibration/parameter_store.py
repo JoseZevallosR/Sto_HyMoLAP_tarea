@@ -15,7 +15,10 @@ from ..utils.logging import get_logger
 
 _log = get_logger("calibration.parameter_store")
 
-_TOP_COLUMNS = ["mu", "lambda", "sigma", "alpha", "beta", "c_r", "k_b", "S0_b", "nse", "J"]
+_TOP_COLUMNS = [
+    "mu", "lambda", "sigma", "alpha", "beta", "c_r", "k_b", "S0_b",
+    "nse", "J", "KGE", "PBIAS", "rank", "selected",
+]
 
 
 def save_best_parameters(result: CalibrationResult, path: str | Path) -> None:
