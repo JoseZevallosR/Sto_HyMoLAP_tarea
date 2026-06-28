@@ -27,11 +27,71 @@ from ..utils.logging import get_logger
 _log = get_logger("hydro.ramis")
 
 
+def validate_ramis_parameters(
+    mu,
+    lambda_,
+    sigma=None,
+    alpha_area: Optional[float] = None,
+    *,
+    require_positive_exponent: bool = True,
+) -> None:
+    """Valida rangos numericos/estructurales del nucleo RAMIS.
+
+    Condiciones usadas por el modelo diario:
+    - ``lambda`` debe ser positiva.
+    - ``mu`` debe ser positiva y, por defecto, mayor que 0.5 para que
+      ``2*mu-1`` sea positivo.
+    - ``0 < mu/lambda < 1`` para que el estado de cuenca tenga memoria
+      estable y no cambie de signo por el factor ``1 - mu/lambda``.
+    - ``sigma`` y ``alpha_area`` no pueden ser negativos.
+    """
+    mu_a = np.asarray(mu, dtype=float)
+    lam_a = np.asarray(lambda_, dtype=float)
+    if mu_a.shape != lam_a.shape and mu_a.size != 1 and lam_a.size != 1:
+        raise ValueError("mu y lambda_ deben ser escalares o broadcast compatibles.")
+    if not np.all(np.isfinite(mu_a)) or not np.all(np.isfinite(lam_a)):
+        raise ValueError("mu y lambda_ deben ser finitos.")
+    if np.any(mu_a <= 0):
+        raise ValueError("mu debe ser positivo.")
+    if require_positive_exponent and np.any(mu_a <= 0.5):
+        raise ValueError("mu debe ser > 0.5 para mantener exponente 2*mu-1 positivo.")
+    if np.any(lam_a <= 0):
+        raise ValueError("lambda_ debe ser positivo.")
+    decay = mu_a / lam_a
+    if np.any(decay <= 0) or np.any(decay >= 1):
+        raise ValueError("RAMIS requiere 0 < mu/lambda < 1 para memoria estable.")
+    if sigma is not None:
+        sig_a = np.asarray(sigma, dtype=float)
+        if not np.all(np.isfinite(sig_a)) or np.any(sig_a < 0):
+            raise ValueError("sigma debe ser finito y no negativo.")
+    if alpha_area is not None:
+        aa = float(alpha_area)
+        if not np.isfinite(aa) or aa <= 0:
+            raise ValueError("alpha_area debe ser finito y positivo.")
+
+
+def validate_ramis_bounds(bounds: dict) -> None:
+    """Valida que los rangos de calibracion no permitan RAMIS inestable."""
+    mu_min, mu_max = bounds["mu"]
+    lam_min, lam_max = bounds["lambda"]
+    sig_min, sig_max = bounds.get("sigma", (0.0, 0.0))
+    validate_ramis_parameters(
+        np.array([mu_min, mu_max]),
+        np.array([lam_min, lam_max]),
+        sigma=np.array([sig_min, sig_max]),
+    )
+    if mu_max / lam_min >= 1.0:
+        raise ValueError(
+            "Bounds RAMIS inestables: mu_max/lambda_min debe ser < 1."
+        )
+
+
 def state_basin(mu: float, lambda_: float, peff: np.ndarray) -> np.ndarray:
     """Estado de la cuenca x_t (version escalar de un parametro).
 
     x_t = x_{t-1} * (1 - mu/lambda) + Peff_t
     """
+    validate_ramis_parameters(mu, lambda_)
     peff = np.asarray(peff, dtype=float)
     n = len(peff)
     x = np.zeros(n, dtype=float)
@@ -49,6 +109,7 @@ def state_basin_vectorized(
 
     Devuelve matriz (n_params, n_tiempos).
     """
+    validate_ramis_parameters(mu, lambda_)
     mu = np.asarray(mu, dtype=float)
     lambda_ = np.asarray(lambda_, dtype=float)
     peff = np.asarray(peff, dtype=float)
@@ -79,6 +140,7 @@ def simulate_fast_candidates(
     Reproduce ``simulate_candidates_paper`` del codigo original. Devuelve
     matriz (n_params, n_tiempos).
     """
+    validate_ramis_parameters(mu, lambda_, sigma=sigma, alpha_area=alpha_area)
     mu = np.asarray(mu, dtype=float)
     lambda_ = np.asarray(lambda_, dtype=float)
     sigma = np.asarray(sigma, dtype=float)
@@ -139,6 +201,7 @@ def simulate_fast_ensemble(
     (n_tiempos, n_traj) para ser consistente con el codigo original de
     validacion.
     """
+    validate_ramis_parameters(mu, lambda_, sigma=sigma, alpha_area=alpha_area)
     peff = np.asarray(peff, dtype=float)
     levy_matrix = np.asarray(levy_matrix, dtype=float)
     n_traj, n = levy_matrix.shape

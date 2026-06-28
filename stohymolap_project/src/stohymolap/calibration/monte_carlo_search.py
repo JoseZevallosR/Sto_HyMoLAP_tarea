@@ -25,8 +25,8 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 from .objective import objective_value
-from ..hydro.baseflow import BaseflowParams, add_baseflow
-from ..hydro.ramis import simulate_fast_candidates
+from ..hydro.baseflow import BaseflowParams, add_baseflow, quickflow_initial_from_total
+from ..hydro.ramis import simulate_fast_candidates, validate_ramis_bounds
 from ..metrics.deterministic import nse_vectorized
 from ..stochastic.levy import stable_rvs_cms
 from ..utils.logging import get_logger
@@ -95,6 +95,7 @@ def calibrate(
         )
     n = len(discharge)
     q0 = float(discharge[np.argmax(valid_obs)])
+    validate_ramis_bounds(bounds)
     rng = np.random.default_rng(seed)
     alpha_area = _alpha_area(discharge, peff)
 
@@ -126,20 +127,10 @@ def calibrate(
             beta_traj = 0.0
             lev = np.zeros(n, dtype=float)
 
-        mu_c = rng.uniform(*bounds["mu"], size=n_param_samples)
-        lam_c = rng.uniform(*bounds["lambda"], size=n_param_samples)
-        sig_c = (
-            rng.uniform(*bounds["sigma"], size=n_param_samples)
-            if use_stochastic
-            else np.zeros(n_param_samples, dtype=float)
-        )
-
-        q_fast = simulate_fast_candidates(
-            mu=mu_c, lambda_=lam_c, sigma=sig_c, peff=peff, q0=q0,
-            levy_values=lev, alpha_area=alpha_area, clamp_negative_q=clamp_negative_q,
-        )  # (n_param_samples, n)
-
         # Baseflow opcional (mismos params para todos los candidatos de la traj).
+        # Primero se define bf para poder separar el caudal observado inicial en
+        # Qfast0 + Qbase0. Si Qfast arranca con Qobs total y luego se suma
+        # Qbase, se duplica parte del caudal inicial.
         if use_baseflow:
             if calibrate_baseflow:
                 bf = BaseflowParams(
@@ -149,6 +140,25 @@ def calibrate(
                 )
             else:
                 bf = BaseflowParams()
+        else:
+            bf = BaseflowParams(c_r=0.0, k_b=0.001, S0_b=0.0)
+
+        q0_fast = quickflow_initial_from_total(q0, bf, use_baseflow=use_baseflow)
+
+        mu_c = rng.uniform(*bounds["mu"], size=n_param_samples)
+        lam_c = rng.uniform(*bounds["lambda"], size=n_param_samples)
+        sig_c = (
+            rng.uniform(*bounds["sigma"], size=n_param_samples)
+            if use_stochastic
+            else np.zeros(n_param_samples, dtype=float)
+        )
+
+        q_fast = simulate_fast_candidates(
+            mu=mu_c, lambda_=lam_c, sigma=sig_c, peff=peff, q0=q0_fast,
+            levy_values=lev, alpha_area=alpha_area, clamp_negative_q=clamp_negative_q,
+        )  # (n_param_samples, n)
+
+        if use_baseflow:
             # add_baseflow espera (n,) o (n, n_traj); transponemos a (n, cand).
             q_total_T, q_base = add_baseflow(
                 q_fast.T, peff, bf, q0_obs=q0, alpha_area=alpha_area,
@@ -156,7 +166,6 @@ def calibrate(
             )
             q_total = q_total_T.T  # (n_param_samples, n)
         else:
-            bf = BaseflowParams(c_r=0.0, k_b=0.001, S0_b=0.0)
             q_total = q_fast
 
         scores = nse_vectorized(discharge, q_total)

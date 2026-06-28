@@ -17,6 +17,8 @@ Parametros:
     k_b  : coeficiente de descarga, rango [0.001, 0.5].
     S0_b : almacenamiento inicial. Si es None se inicializa como una fraccion
            del caudal observado inicial (Q0 / k_b en equilibrio aproximado).
+           Si existe q0_obs, el caudal base inicial se limita para que no
+           supere el caudal total observado inicial.
 """
 from __future__ import annotations
 
@@ -45,6 +47,69 @@ class BaseflowParams:
             k_b=float(np.clip(self.k_b, 0.001, 0.5)),
             S0_b=self.S0_b,
         )
+
+
+def initial_storage(
+    params: BaseflowParams,
+    q0_obs: Optional[float] = None,
+    *,
+    max_baseflow_fraction: float = 0.95,
+) -> float:
+    """Devuelve el almacenamiento inicial fisicamente consistente.
+
+    Cuando existe ``q0_obs`` se interpreta como caudal total observado al
+    inicio. Por tanto, el caudal base inicial ``k_b*S0`` no debe superar ese
+    total, para no obligar a un caudal rapido negativo ni duplicar el caudal
+    inicial al ensamblar ``Qfast + Qbase``.
+    """
+    p = params.clipped()
+    if p.S0_b is not None:
+        s0 = max(0.0, float(p.S0_b))
+    elif q0_obs is not None and p.k_b > 0:
+        # En equilibrio Q_b = k_b * S. Usamos una fraccion conservadora
+        # del caudal observado inicial como base cuando S0_b no se calibra.
+        s0 = max(0.0, 0.2 * float(q0_obs) / p.k_b)
+    else:
+        s0 = 0.0
+
+    if q0_obs is not None and np.isfinite(q0_obs) and float(q0_obs) > 0 and p.k_b > 0:
+        max_frac = float(np.clip(max_baseflow_fraction, 0.0, 1.0))
+        max_s0 = max_frac * float(q0_obs) / p.k_b
+        s0 = min(s0, max_s0)
+    return float(s0)
+
+
+def initial_baseflow_discharge(
+    params: BaseflowParams,
+    q0_obs: Optional[float] = None,
+    *,
+    max_baseflow_fraction: float = 0.95,
+) -> float:
+    """Caudal base inicial ``Q_b[0]`` consistente con ``linear_reservoir``."""
+    p = params.clipped()
+    return float(p.k_b * initial_storage(
+        p, q0_obs=q0_obs, max_baseflow_fraction=max_baseflow_fraction
+    ))
+
+
+def quickflow_initial_from_total(
+    q0_total: float,
+    params: Optional[BaseflowParams] = None,
+    *,
+    use_baseflow: bool = False,
+    min_qfast: float = 1e-6,
+) -> float:
+    """Parte rapida inicial compatible con ``Qtotal = Qfast + Qbase``.
+
+    Si el modelo usa baseflow, el caudal observado inicial representa el total.
+    Por eso RAMIS debe arrancar con ``Qfast0 = Qobs0 - Qbase0`` y no con el
+    total completo; de lo contrario se suma dos veces una parte del caudal.
+    """
+    q0_total = float(q0_total)
+    if not use_baseflow or params is None:
+        return max(q0_total, min_qfast)
+    q0_base = initial_baseflow_discharge(params, q0_obs=q0_total)
+    return max(q0_total - q0_base, min_qfast)
 
 
 def linear_reservoir(
@@ -79,14 +144,7 @@ def linear_reservoir(
         raise ValueError("alpha_area debe ser finito y positivo para el reservorio baseflow.")
     n = len(peff)
 
-    if p.S0_b is not None:
-        s0 = float(p.S0_b)
-    elif q0_obs is not None and p.k_b > 0:
-        # En equilibrio Q_b = k_b * S  =>  S0 ~ Q0_base / k_b. Usamos una
-        # fraccion conservadora (20%) del caudal observado inicial como base.
-        s0 = max(0.0, 0.2 * float(q0_obs) / p.k_b)
-    else:
-        s0 = 0.0
+    s0 = initial_storage(p, q0_obs=q0_obs)
 
     S = np.zeros(n, dtype=float)
     Q_base = np.zeros(n, dtype=float)

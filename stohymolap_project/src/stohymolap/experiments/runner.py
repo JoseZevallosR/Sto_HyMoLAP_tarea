@@ -33,7 +33,7 @@ from ..data.preprocessing import (
 )
 from ..features.feature_builder import build_sequences, build_tabular, select_feature_columns
 from ..features.uncertainty_features import ensemble_summary_to_frame
-from ..hydro.baseflow import BaseflowParams
+from ..hydro.baseflow import BaseflowParams, quickflow_initial_from_total
 from ..hydro.ramis import simulate_fast_deterministic
 from ..hydro.water_balance import assemble_total_discharge
 from ..metrics.deterministic import all_deterministic
@@ -188,8 +188,11 @@ class ExperimentRunner:
             )
 
         # Deterministico (E1 / A1): Qfast sin ruido + baseflow opcional.
+        q0_fast = quickflow_initial_from_total(
+            q0, self.baseflow_params, use_baseflow=self.ec.use_baseflow
+        )
         q_fast = simulate_fast_deterministic(
-            mu=bp["mu"], lambda_=bp["lambda"], peff=peff, q0=q0,
+            mu=bp["mu"], lambda_=bp["lambda"], peff=peff, q0=q0_fast,
             alpha_area=self.cal_result.alpha_area,
         )
         q_total, q_base = assemble_total_discharge(

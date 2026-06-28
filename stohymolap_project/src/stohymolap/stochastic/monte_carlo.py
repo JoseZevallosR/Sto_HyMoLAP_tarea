@@ -13,7 +13,7 @@ from typing import Dict, Optional
 import numpy as np
 
 from .levy import stable_rvs_cms
-from ..hydro.baseflow import BaseflowParams
+from ..hydro.baseflow import BaseflowParams, quickflow_initial_from_total
 from ..hydro.ramis import simulate_fast_ensemble
 from ..hydro.water_balance import assemble_total_discharge
 from ..utils.logging import get_logger
@@ -94,8 +94,11 @@ def run_monte_carlo(
             alpha=alpha_levy, beta=beta_levy, loc=0.0, scale=1.0,
             size=(current, n), rng=rng,
         )
+        q0_fast = quickflow_initial_from_total(
+            q0, baseflow_params, use_baseflow=use_baseflow
+        )
         q_fast = simulate_fast_ensemble(
-            mu=mu, lambda_=lambda_, sigma=sigma, peff=peff, q0=q0,
+            mu=mu, lambda_=lambda_, sigma=sigma, peff=peff, q0=q0_fast,
             levy_matrix=levy_matrix, alpha_area=alpha_area,
             clamp_negative_q=clamp_negative_q,
         )  # (n, current)

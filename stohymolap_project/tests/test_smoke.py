@@ -242,3 +242,56 @@ def test_ramis_continuous_validation_does_not_use_validation_q0(tmp_path):
     assert len(sim_val.q_total) == len(val)
     assert not np.isclose(sim_val.q_total[0], 999.0)
     assert sim_val.q_total[0] < 10.0
+
+
+def test_baseflow_initialization_does_not_double_count_q0():
+    from stohymolap.hydro.baseflow import (
+        BaseflowParams,
+        add_baseflow,
+        quickflow_initial_from_total,
+    )
+    from stohymolap.hydro.ramis import simulate_fast_deterministic
+
+    q0_total = 10.0
+    peff = np.zeros(5, dtype=float)
+    params = BaseflowParams(c_r=0.0, k_b=0.2, S0_b=15.0)  # Qbase0=3
+
+    q0_fast = quickflow_initial_from_total(q0_total, params, use_baseflow=True)
+    q_fast = simulate_fast_deterministic(
+        mu=0.8, lambda_=2.5, peff=peff, q0=q0_fast, alpha_area=1.0
+    )
+    q_total, q_base = add_baseflow(
+        q_fast, peff, params, q0_obs=q0_total, alpha_area=1.0
+    )
+
+    assert np.isclose(q_base[0], 3.0)
+    assert np.isclose(q_fast[0], 7.0)
+    assert np.isclose(q_total[0], q0_total)
+
+
+def test_baseflow_initial_storage_is_capped_by_total_q0():
+    from stohymolap.hydro.baseflow import BaseflowParams, linear_reservoir
+
+    params = BaseflowParams(c_r=0.0, k_b=0.5, S0_b=1000.0)
+    q_base, storage = linear_reservoir(
+        np.zeros(3), params, q0_obs=10.0, alpha_area=1.0
+    )
+
+    assert q_base[0] <= 9.5 + 1e-12
+    assert storage[0] <= 19.0 + 1e-12
+
+
+def test_ramis_rejects_unstable_parameter_bounds():
+    from stohymolap.hydro.ramis import validate_ramis_bounds
+
+    bad_bounds = {
+        "mu": (0.75, 1.2),
+        "lambda": (1.0, 3.0),
+        "sigma": (0.0, 0.1),
+    }
+    try:
+        validate_ramis_bounds(bad_bounds)
+    except ValueError as exc:
+        assert "inestables" in str(exc) or "mu/lambda" in str(exc)
+        return
+    raise AssertionError("No rechazo bounds RAMIS inestables.")
