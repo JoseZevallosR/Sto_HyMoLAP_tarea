@@ -432,6 +432,21 @@ class ExperimentRunner:
         )
 
         checks.check_lengths_match(obs_v, sim_v)
+        sim_tr_raw = np.asarray(sim_tr, dtype=float).copy()
+        sim_v_raw = np.asarray(sim_v, dtype=float).copy()
+        sim_tr, sim_v, postprocess = self._postprocess_qsim(sim_tr_raw, sim_v_raw)
+        (self.out_dir / "postprocessing_report.json").write_text(
+            json.dumps(postprocess, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        if postprocess.get("applied") and postprocess["validation"]["n_negative_raw"] > 0:
+            _log.warning(
+                "%s: %d predicciones ML negativas en validation fueron truncadas a cero "
+                "para respetar Q>=0. Min raw=%.6f",
+                self.experiment_id,
+                postprocess["validation"]["n_negative_raw"],
+                postprocess["validation"]["min_raw"],
+            )
         checks.check_non_negative_q(sim_v)
 
         det_tr = all_deterministic(obs_tr, sim_tr)
@@ -465,10 +480,16 @@ class ExperimentRunner:
                     self.out_dir / "physical_uncertainty_reference.csv", index=False
                 )
 
-        # Predicciones.
-        pd.DataFrame({"date": dates_tr, "Qobs": obs_tr, "Qsim": sim_tr}).to_csv(
+        # Predicciones. Para ML/hibridos se conserva Qsim_raw para auditar
+        # cualquier truncamiento no-negativo aplicado a la salida final.
+        pred_train_rows = {"date": dates_tr, "Qobs": obs_tr, "Qsim": sim_tr}
+        pred_val_rows = {"date": dates_v, "Qobs": obs_v, "Qsim": sim_v}
+        if postprocess.get("applied"):
+            pred_train_rows["Qsim_raw"] = sim_tr_raw
+            pred_val_rows["Qsim_raw"] = sim_v_raw
+        pd.DataFrame(pred_train_rows).to_csv(
             self.out_dir / "predictions_train.csv", index=False)
-        pred_val_df = pd.DataFrame({"date": dates_v, "Qobs": obs_v, "Qsim": sim_v})
+        pred_val_df = pd.DataFrame(pred_val_rows)
         pred_val_df.to_csv(self.out_dir / "predictions_validation.csv", index=False)
 
         # Componentes fisicos para auditoria Fase 2.6.
@@ -518,6 +539,43 @@ class ExperimentRunner:
             "evaluation_window": {**window.to_dict(), "train": win_tr, "validation": win_v},
             "backend": getattr(self, "_ml_backend", "physical"),
         }
+
+    def _postprocess_qsim(self, sim_tr_raw: np.ndarray, sim_v_raw: np.ndarray):
+        """Aplica restricciones fisicas finales a predicciones ML/hibridas.
+
+        Los modelos de aprendizaje pueden producir valores ligeramente negativos
+        por extrapolacion numerica, especialmente en el fallback MLP usado por
+        GRU cuando no hay TensorFlow/PyTorch. Como el caudal no puede ser
+        negativo, solo para salidas ML/hibridas se trunca Qsim<0 a 0 y se
+        guarda el valor crudo en ``Qsim_raw`` junto con un reporte auditable.
+        Para modelos fisicos no se corrige: la validacion debe fallar si RAMIS
+        produce Q<0.
+        """
+        mt = self.ec.model_type
+        apply_clip = mt in {"machine_learning", "hybrid", "hybrid_sequence"}
+
+        def _summary(raw: np.ndarray) -> dict:
+            arr = np.asarray(raw, dtype=float)
+            finite = arr[np.isfinite(arr)]
+            neg = finite[finite < 0]
+            return {
+                "n": int(len(arr)),
+                "n_negative_raw": int(len(neg)),
+                "min_raw": float(np.min(finite)) if len(finite) else None,
+                "max_raw": float(np.max(finite)) if len(finite) else None,
+                "min_after": float(max(0.0, np.min(finite))) if apply_clip and len(finite) else (float(np.min(finite)) if len(finite) else None),
+            }
+
+        report = {
+            "applied": bool(apply_clip),
+            "method": "clip_negative_to_zero" if apply_clip else "none",
+            "model_type": mt,
+            "train": _summary(sim_tr_raw),
+            "validation": _summary(sim_v_raw),
+        }
+        if not apply_clip:
+            return sim_tr_raw, sim_v_raw, report
+        return np.clip(sim_tr_raw, 0.0, None), np.clip(sim_v_raw, 0.0, None), report
 
     def _values_for_dates(self, subset: pd.DataFrame, values, target_dates) -> np.ndarray:
         """Extrae valores del subconjunto original para fechas ya alineadas.

@@ -558,3 +558,59 @@ def test_phase32_common_validation_window_equalizes_physical_and_ml(tmp_path, mo
     meta = json.loads((out / "E1_RAMIS_DET_BF" / "evaluation_window.json").read_text())
     assert meta["start_offset"] == 3
     assert meta["validation"]["n_after"] == len(p_phys)
+
+
+
+def test_phase33_ml_predictions_are_clipped_and_audited(tmp_path):
+    from stohymolap.experiments.runner import ExperimentRunner
+
+    cfg = {
+        "global": {"seed": 1, "output_root": str(tmp_path / "out")},
+        "pet": {},
+        "calibration": {},
+        "stochastic": {},
+        "baseflow": {},
+        "experiments": {
+            "E4_ML_PURE_XGB": {
+                "description": "ml",
+                "model_type": "machine_learning",
+                "ml_model": "xgboost",
+                "features": {"source": "observed_forcing", "variables": ["P"]},
+            }
+        },
+    }
+    runner = ExperimentRunner(cfg, "E4_ML_PURE_XGB")
+    tr, va, report = runner._postprocess_qsim(
+        np.array([-0.2, 1.0]),
+        np.array([0.3, -0.005, 2.0]),
+    )
+
+    assert report["applied"] is True
+    assert report["validation"]["n_negative_raw"] == 1
+    assert np.all(va >= 0.0)
+    assert va[1] == 0.0
+    assert tr[0] == 0.0
+
+
+def test_phase33_common_intersection_metrics_align_dates(tmp_path):
+    from stohymolap.experiments.comparison import build_common_intersection_metrics
+
+    exp_root = tmp_path / "experiments"
+    dates_a = pd.date_range("2020-01-01", periods=5, freq="D")
+    dates_b = pd.date_range("2020-01-03", periods=5, freq="D")
+    for eid, dates in [("A", dates_a), ("B", dates_b)]:
+        d = exp_root / eid
+        d.mkdir(parents=True)
+        qobs = np.arange(len(dates), dtype=float) + 1.0
+        pd.DataFrame({
+            "date": dates,
+            "Qobs": qobs,
+            "Qsim": qobs,
+        }).to_csv(d / "predictions_validation.csv", index=False)
+
+    out = build_common_intersection_metrics(exp_root, ["A", "B"])
+    assert set(out["experiment"]) == {"A", "B"}
+    assert out["n_eval"].tolist() == [3, 3]
+    assert out["common_start_date"].iloc[0] == "2020-01-03"
+    assert out["common_end_date"].iloc[0] == "2020-01-05"
+    assert np.allclose(out["NSE"], 1.0)

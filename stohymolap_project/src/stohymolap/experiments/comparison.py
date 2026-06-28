@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from ..metrics.deterministic import all_deterministic
 from ..utils.logging import get_logger
 
 _log = get_logger("experiments.comparison")
@@ -149,6 +150,56 @@ def build_evaluation_window_comparison(exp_root: Path, experiment_ids: List[str]
             "train_end_date": tr.get("end_date"),
             "n_train_before_window": tr.get("n_before"),
             "n_train_after_window": tr.get("n_after"),
+        })
+    return pd.DataFrame(rows)
+
+
+def build_common_intersection_metrics(exp_root: Path, experiment_ids: List[str]) -> pd.DataFrame:
+    """Recalcula metricas sobre la interseccion exacta de fechas disponibles.
+
+    La ventana comun declarada iguala el inicio calendario, pero los modelos ML
+    pueden descartar filas adicionales por lags/secuencias o Qobs faltante. Para
+    comparaciones de paper, esta tabla usa solo fechas presentes en todos los
+    experimentos disponibles.
+    """
+    frames: Dict[str, pd.DataFrame] = {}
+    common_dates = None
+    for eid in experiment_ids:
+        p = exp_root / eid / "predictions_validation.csv"
+        if not p.exists():
+            continue
+        try:
+            df = pd.read_csv(p, usecols=["date", "Qobs", "Qsim"])
+        except Exception:  # noqa: BLE001
+            continue
+        if df.empty:
+            continue
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.dropna(subset=["date", "Qobs", "Qsim"]).drop_duplicates("date")
+        df = df.set_index("date").sort_index()
+        if df.empty:
+            continue
+        frames[eid] = df
+        dates = set(df.index)
+        common_dates = dates if common_dates is None else common_dates.intersection(dates)
+
+    if not frames or not common_dates:
+        return pd.DataFrame()
+
+    common_idx = pd.DatetimeIndex(sorted(common_dates))
+    rows = []
+    for eid in experiment_ids:
+        df = frames.get(eid)
+        if df is None:
+            continue
+        sub = df.loc[common_idx]
+        metrics = all_deterministic(sub["Qobs"].to_numpy(), sub["Qsim"].to_numpy())
+        rows.append({
+            "experiment": eid,
+            "n_eval": int(len(sub)),
+            "common_start_date": common_idx[0].date().isoformat(),
+            "common_end_date": common_idx[-1].date().isoformat(),
+            **{k: metrics.get(k) for k in ["NSE", "KGE", "RMSE", "MAE", "PBIAS", "R2"]},
         })
     return pd.DataFrame(rows)
 
@@ -328,6 +379,9 @@ def run_comparison(
     uncertainty = build_uncertainty_comparison(results)
     ablations = build_ablation_effects(results)
     eval_windows = build_evaluation_window_comparison(exp_root, experiment_ids)
+    common_results = build_common_intersection_metrics(exp_root, experiment_ids)
+    common_leaderboard = build_leaderboard(common_results)
+    common_ablations = build_ablation_effects(common_results)
 
     leaderboard.to_csv(comparison_root / "leaderboard.csv", index=False)
     matrix.to_csv(comparison_root / "experiment_matrix.csv", index=False)
@@ -336,6 +390,9 @@ def run_comparison(
     uncertainty.to_csv(comparison_root / "uncertainty_comparison.csv", index=False)
     ablations.to_csv(comparison_root / "ablation_effects.csv", index=False)
     eval_windows.to_csv(comparison_root / "evaluation_window_comparison.csv", index=False)
+    common_results.to_csv(comparison_root / "validation_metrics_common_intersection.csv", index=False)
+    common_leaderboard.to_csv(comparison_root / "leaderboard_common_intersection.csv", index=False)
+    common_ablations.to_csv(comparison_root / "ablation_effects_common_intersection.csv", index=False)
 
     _fig_metrics_barplot(leaderboard, fig_dir / "metrics_barplot.png")
     _fig_regime_rmse(regime, fig_dir / "regime_rmse_comparison.png")
