@@ -34,6 +34,7 @@ calibration:
   n_param_samples: 800
   n_iter: 400
   top_frac: 0.10
+  parameter_selection: best_j # usar la mejor trayectoria individual por J; top_k_mean solo legado
   mu_bounds: [0.75, 0.95]
   lambda_bounds: [2.0, 3.4]
   sigma_bounds: [0.0, 0.10]

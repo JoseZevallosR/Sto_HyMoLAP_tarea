@@ -351,6 +351,40 @@ class ExperimentRunner:
         model.save(self.out_dir / "model_artifact" / "model.joblib")
         return ptr, pv
 
+    def _save_physical_components(self, subset: pd.DataFrame, sim: Optional[_SimBundle], split: str) -> None:
+        """Guarda componentes RAMIS/baseflow para auditoria fisica.
+
+        Para experimentos fisicos e hibridos escribe una tabla con Qtotal,
+        Qfast, Qbase y, cuando existan, estadisticos del ensemble. Esta salida
+        permite verificar que Qtotal = Qfast + Qbase y que Qsim coincide con
+        el componente fisico usado como prediccion/base de features.
+        """
+        if sim is None:
+            return
+        n = len(subset)
+        rows = {
+            "date": subset["date"].to_numpy(),
+            "Qobs": subset["Qobs"].to_numpy(dtype=float),
+            "Peff": subset["Peff"].to_numpy(dtype=float),
+            "Qtotal": np.asarray(sim.q_total, dtype=float),
+            "Qbase": np.asarray(sim.q_base, dtype=float),
+        }
+        if "Qfast" in sim.summary:
+            rows["Qfast"] = np.asarray(sim.summary["Qfast"], dtype=float)
+        else:
+            rows["Qfast"] = rows["Qtotal"] - rows["Qbase"]
+
+        # Guarda estadisticos adicionales del ensemble, si existen y tienen la
+        # misma longitud del subconjunto.
+        for key, value in sim.summary.items():
+            arr = np.asarray(value)
+            if key in rows:
+                continue
+            if arr.ndim == 1 and len(arr) == n:
+                rows[key] = arr.astype(float)
+
+        pd.DataFrame(rows).to_csv(self.out_dir / f"physical_components_{split}.csv", index=False)
+
     # ------------------------------------------------------------- evaluation
     def _evaluate_and_save(self, train, val, pred_train, pred_val, sim_train, sim_val):
         from ..plotting.hydrographs import plot_hydrograph
@@ -396,6 +430,10 @@ class ExperimentRunner:
             self.out_dir / "predictions_train.csv", index=False)
         pred_val_df = pd.DataFrame({"date": dates_v, "Qobs": obs_v, "Qsim": sim_v})
         pred_val_df.to_csv(self.out_dir / "predictions_validation.csv", index=False)
+
+        # Componentes fisicos para auditoria Fase 2.6.
+        self._save_physical_components(train, sim_train, "train")
+        self._save_physical_components(val, sim_val, "validation")
 
         # Ensemble summary (si aplica).
         if sim_val is not None and "q05" in sim_val.summary:

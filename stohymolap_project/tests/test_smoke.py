@@ -345,3 +345,92 @@ def test_calibration_selects_best_j_row_instead_of_top_k_mean():
     assert np.isclose(result.best_params["mu"], result.top_k_table[0, 0])
     assert np.isclose(result.best_params["selected_J"], result.top_k_table[0, 9])
     assert bool(result.top_k_table[0, -1])
+
+
+def test_phase26_e1_saves_physical_components(tmp_path):
+    from stohymolap.experiments.registry import run_experiment
+
+    data_path = _tiny_dataset(tmp_path)
+    cfg = {
+        "global": {
+            "data_path": str(data_path),
+            "train_fraction": 0.7,
+            "forecast_horizon": 1,
+            "lags": [0, 1, 2],
+            "seed": 5,
+            "output_root": str(tmp_path / "out"),
+            "fill_obs_with_sim": False,
+        },
+        "pet": {"latitude": -15.0},
+        "calibration": {"n_param_samples": 15, "n_iter": 8, "top_frac": 0.25, "parameter_selection": "best_j"},
+        "stochastic": {"n_trajectories": 10, "levy": {}},
+        "baseflow": {"enabled": True, "calibrate": True},
+        "experiments": {
+            "E1_RAMIS_DET_BF": {
+                "description": "test",
+                "model_type": "physical",
+                "stochastic": False,
+                "baseflow": True,
+            }
+        },
+    }
+    run_experiment(cfg, "E1_RAMIS_DET_BF")
+    comp_path = tmp_path / "out" / "E1_RAMIS_DET_BF" / "physical_components_validation.csv"
+    assert comp_path.exists()
+    comp = pd.read_csv(comp_path)
+    for col in ["Qtotal", "Qfast", "Qbase"]:
+        assert col in comp.columns
+    assert np.allclose(comp["Qtotal"], comp["Qfast"] + comp["Qbase"])
+
+
+def test_phase26_physical_audit_passes_on_valid_outputs(tmp_path):
+    from stohymolap.diagnostics.physical_audit import audit_physical_experiments
+
+    exp_root = tmp_path / "experiments"
+    eid = "E1_RAMIS_DET_BF"
+    exp_dir = exp_root / eid
+    exp_dir.mkdir(parents=True)
+
+    dates = pd.date_range("2020-01-01", periods=12, freq="D")
+    qobs = np.linspace(1.0, 3.0, len(dates))
+    qbase = np.full(len(dates), 0.3)
+    qfast = qobs - qbase
+    qtotal = qfast + qbase
+
+    pred = pd.DataFrame({"date": dates, "Qobs": qobs, "Qsim": qtotal})
+    pred.to_csv(exp_dir / "predictions_train.csv", index=False)
+    pred.to_csv(exp_dir / "predictions_validation.csv", index=False)
+    comp = pd.DataFrame({
+        "date": dates, "Qobs": qobs, "Peff": np.zeros(len(dates)),
+        "Qtotal": qtotal, "Qbase": qbase, "Qfast": qfast,
+    })
+    comp.to_csv(exp_dir / "physical_components_train.csv", index=False)
+    comp.to_csv(exp_dir / "physical_components_validation.csv", index=False)
+
+    best = pd.DataFrame([{
+        "mu": 0.8, "lambda": 2.5, "sigma": 0.0, "alpha": 2.0, "beta": 0.0,
+        "c_r": 0.2, "k_b": 0.1, "S0_b": 3.0, "n_top": 1,
+        "selection_strategy": "best_j", "selected_rank": 1, "selected_J": 0.1,
+    }])
+    best.to_csv(exp_dir / "best_parameters.csv", index=False)
+    top = pd.DataFrame([{
+        "mu": 0.8, "lambda": 2.5, "sigma": 0.0, "alpha": 2.0, "beta": 0.0,
+        "c_r": 0.2, "k_b": 0.1, "S0_b": 3.0, "nse": 0.9, "J": 0.1,
+        "KGE": 0.9, "PBIAS": 0.0, "rank": 1, "selected": 1,
+    }])
+    top.to_csv(exp_dir / "top_k_parameters.csv", index=False)
+    pd.DataFrame({
+        "experiment": [eid, eid, eid],
+        "regime": ["low", "mid", "high"],
+        "n": [4, 4, 4],
+        "NSE": [1.0, 1.0, 1.0],
+        "KGE": [1.0, 1.0, 1.0],
+        "RMSE": [0.0, 0.0, 0.0],
+        "MAE": [0.0, 0.0, 0.0],
+        "PBIAS": [0.0, 0.0, 0.0],
+    }).to_csv(exp_dir / "metrics_by_regime.csv", index=False)
+
+    result = audit_physical_experiments(exp_root, tmp_path / "comparison", [eid])
+    assert result["status"] == "PASS"
+    assert result["report_path"].exists()
+    assert result["audit_issues"].empty

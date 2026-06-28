@@ -1,0 +1,16 @@
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated outputs
+outputs/
+contextos/
+
+# Local patches / generated bundles
+*.patch
+*.tar.gz
+
+# Local notebooks/cache
+.ipynb_checkpoints/
