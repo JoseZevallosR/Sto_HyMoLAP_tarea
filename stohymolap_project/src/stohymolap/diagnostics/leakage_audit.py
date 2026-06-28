@@ -154,8 +154,30 @@ def _read_predictions(path: Path, rows: List[AuditIssue], eid: str, split: str) 
         _issue(rows, "ERROR", eid, f"predictions_{split}_order", "Las fechas no estan ordenadas crecientemente.")
     for col in ["Qobs", "Qsim"]:
         vals = pd.to_numeric(df[col], errors="coerce")
-        if vals.isna().any():
-            _issue(rows, "ERROR", eid, f"predictions_{split}_{col}_finite", f"{col} contiene NaN/no numericos.")
+        n_missing = int(vals.isna().sum())
+        n_rows = int(len(vals))
+        df[col] = vals
+        if n_missing == 0:
+            continue
+        evidence = {"n_missing": n_missing, "n_rows": n_rows}
+        if col == "Qobs" and n_missing < n_rows:
+            _issue(
+                rows,
+                "WARN",
+                eid,
+                f"predictions_{split}_{col}_finite",
+                f"{col} contiene valores faltantes/no numericos; se conservan como brechas observacionales y deben excluirse de metricas.",
+                evidence,
+            )
+        else:
+            _issue(
+                rows,
+                "ERROR",
+                eid,
+                f"predictions_{split}_{col}_finite",
+                f"{col} contiene NaN/no numericos que impiden auditar la serie.",
+                evidence,
+            )
     return df
 
 
@@ -375,7 +397,10 @@ def _audit_postprocessing(rows: List[AuditIssue], eid: str, exp_dir: Path, exp: 
     expected_applied = model_type in {"machine_learning", "hybrid", "hybrid_sequence"}
     meta = _read_json(exp_dir / "postprocessing_report.json")
     if not meta:
-        _issue(rows, "WARN", eid, "postprocessing_report_exists", "Falta postprocessing_report.json.")
+        if not expected_applied:
+            _issue(rows, "PASS", eid, "postprocessing_not_applicable", "Modelo fisico sin postproceso ML; no requiere postprocessing_report.json.")
+            return "not_applicable", None
+        _issue(rows, "WARN", eid, "postprocessing_report_exists", "Falta postprocessing_report.json para modelo ML/hibrido; rerun recomendado para trazabilidad de clipping.")
         return "missing", None
     applied = bool(meta.get("applied", False))
     method = str(meta.get("method", "missing"))
@@ -520,6 +545,8 @@ def audit_leakage(
         "summary_path": comparison_root / "leakage_audit_summary.csv",
         "report_path": comparison_root / "leakage_audit_report.md",
         "json_path": comparison_root / "leakage_audit.json",
+        "status_path": comparison_root / "leakage_audit_status.txt",
+        "backend_summary_path": comparison_root / "ml_backend_summary.csv",
     }
     if write:
         write_leakage_audit_outputs(result)
@@ -534,10 +561,19 @@ def write_leakage_audit_outputs(result: Mapping[str, Any]) -> None:
     summary_path = Path(result["summary_path"])
     report_path = Path(result["report_path"])
     json_path = Path(result["json_path"])
+    status_path = Path(result["status_path"])
+    backend_summary_path = Path(result["backend_summary_path"])
     issues_path.parent.mkdir(parents=True, exist_ok=True)
 
     issues.to_csv(issues_path, index=False)
     summary.to_csv(summary_path, index=False)
+    backend_cols = [
+        "experiment", "model_type", "ml_model", "backend", "backend_label",
+        "feature_source", "postprocess_method", "regime_threshold_source",
+    ]
+    available_backend_cols = [col for col in backend_cols if col in summary.columns]
+    summary[available_backend_cols].to_csv(backend_summary_path, index=False)
+    status_path.write_text(str(result["status"]) + "\n", encoding="utf-8")
     payload = {
         "status": result["status"],
         "summary": summary.to_dict(orient="records"),

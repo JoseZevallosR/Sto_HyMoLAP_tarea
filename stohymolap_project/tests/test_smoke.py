@@ -682,6 +682,9 @@ def test_phase34a_leakage_audit_passes_on_clean_outputs(tmp_path):
 
     assert result["status"] == "PASS"
     assert result["report_path"].exists()
+    assert result["status_path"].exists()
+    assert result["backend_summary_path"].exists()
+    assert result["status_path"].read_text(encoding="utf-8").strip() == "PASS"
     issues = result["audit_issues"]
     assert not issues[issues["severity"].isin(["WARN", "ERROR"])].any().any()
 
@@ -746,3 +749,46 @@ def test_phase34a_backend_classifier_marks_gru_fallback():
     assert classify_backend("gru", "tensorflow") == "real_gru"
     assert classify_backend("gru", "torch") == "real_gru"
     assert classify_backend("gru", "sklearn_mlp") == "fallback_mlp_on_flattened_sequences"
+
+
+def test_phase34a_leakage_audit_treats_partial_qobs_gaps_as_warn(tmp_path):
+    from stohymolap.diagnostics.leakage_audit import audit_leakage
+
+    exp_root = tmp_path / "experiments"
+    comp_root = tmp_path / "comparison"
+    eid = "E0_RAMIS_DET_NOBF"
+    exp_dir = exp_root / eid
+    exp_dir.mkdir(parents=True)
+
+    train_dates = pd.date_range("2020-01-01", periods=5, freq="D")
+    val_dates = pd.date_range("2020-01-06", periods=4, freq="D")
+    pd.DataFrame({"date": train_dates, "Qobs": [1.0, np.nan, 3.0, 4.0, 5.0], "Qsim": np.arange(5.0)}).to_csv(
+        exp_dir / "predictions_train.csv", index=False
+    )
+    pd.DataFrame({"date": val_dates, "Qobs": [1.0, 2.0, np.nan, 4.0], "Qsim": np.arange(4.0)}).to_csv(
+        exp_dir / "predictions_validation.csv", index=False
+    )
+    (exp_dir / "evaluation_window.json").write_text(
+        json.dumps({
+            "train": {"start_date": "2020-01-01", "end_date": "2020-01-05", "n_after": 5},
+            "validation": {"start_date": "2020-01-06", "end_date": "2020-01-09", "n_after": 4},
+        }),
+        encoding="utf-8",
+    )
+    comp_root.mkdir(parents=True)
+    pd.DataFrame({"experiment": [eid], "n_eval": [3]}).to_csv(comp_root / "leaderboard_common_intersection.csv", index=False)
+
+    cfg = {
+        "global": {"forecast_horizon": 1, "ramis_state_mode": "continuous_train_validation", "output_root": str(exp_root)},
+        "experiments": {eid: {"model_type": "physical"}},
+    }
+
+    result = audit_leakage(cfg, exp_root, comp_root, [eid], write=True)
+
+    assert result["status"] == "WARN"
+    issues = result["audit_issues"]
+    qobs_rows = issues[issues["check"].str.contains("Qobs_finite", regex=False)]
+    assert set(qobs_rows["severity"]) == {"WARN"}
+    assert not issues[(issues["check"] == "postprocessing_report_exists") & (issues["severity"] == "WARN")].any().any()
+    assert result["status_path"].read_text(encoding="utf-8").strip() == "WARN"
+    assert result["backend_summary_path"].exists()
