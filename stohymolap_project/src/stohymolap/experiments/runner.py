@@ -200,6 +200,46 @@ class ExperimentRunner:
         summary = {"Qmean": q_total, "Qbase": q_base, "Qfast": q_fast}
         return _SimBundle(q_total=q_total, q_base=q_base, summary=summary)
 
+    def _slice_sim_bundle(self, sim: _SimBundle, start: int, stop: int) -> _SimBundle:
+        """Recorta una simulacion continua preservando resumen y bandas."""
+        summary = {
+            k: (np.asarray(v)[start:stop] if np.ndim(v) == 1 and len(v) == len(sim.q_total) else v)
+            for k, v in sim.summary.items()
+        }
+        lower = None if sim.lower is None else np.asarray(sim.lower)[start:stop]
+        upper = None if sim.upper is None else np.asarray(sim.upper)[start:stop]
+        return _SimBundle(
+            q_total=np.asarray(sim.q_total)[start:stop],
+            q_base=np.asarray(sim.q_base)[start:stop],
+            summary=summary,
+            lower=lower,
+            upper=upper,
+        )
+
+    def run_ramis_continuous(self, train: pd.DataFrame, val: pd.DataFrame) -> Tuple[_SimBundle, _SimBundle]:
+        """Ejecuta RAMIS una sola vez sobre train+validation y luego separa.
+
+        Esto evita reiniciar la validacion con el primer Qobs de validacion y
+        mantiene la memoria hidrologica de RAMIS/baseflow desde calibracion
+        hacia validacion. El unico Qobs usado como condicion inicial es el
+        primer Qobs finito de calibracion.
+        """
+        full = pd.concat([train, val], axis=0, ignore_index=True)
+        qobs_train = train["Qobs"].to_numpy(dtype=float)
+        if not np.isfinite(qobs_train).any():
+            raise ValueError(f"{self.experiment_id}: train sin Qobs finito para inicializar RAMIS.")
+        q0_train = float(qobs_train[np.argmax(np.isfinite(qobs_train))])
+        _log.info(
+            "RAMIS estado continuo train+validation: q0 tomado de train=%.4f; "
+            "no se usa Qobs de validacion para inicializar.",
+            q0_train,
+        )
+        sim_full = self.run_ramis(full, offset=999)
+        n_train = len(train)
+        sim_train = self._slice_sim_bundle(sim_full, 0, n_train)
+        sim_val = self._slice_sim_bundle(sim_full, n_train, len(full))
+        return sim_train, sim_val
+
     # ----------------------------------------------------------- feature frames
     def _feature_frame(self, subset: pd.DataFrame, sim: Optional[_SimBundle]) -> pd.DataFrame:
         """Construye el DataFrame de features segun la fuente declarada."""
@@ -249,8 +289,18 @@ class ExperimentRunner:
         sim_train = sim_val = None
         if mt in {"physical", "stochastic_physical", "hybrid", "hybrid_sequence"}:
             self.calibrate_params(train)
-            sim_train = self.run_ramis(train, offset=1)
-            sim_val = self.run_ramis(val, offset=999)
+            state_mode = self.ec.glob.get("ramis_state_mode", "continuous_train_validation")
+            if state_mode == "continuous_train_validation":
+                sim_train, sim_val = self.run_ramis_continuous(train, val)
+            elif state_mode == "reset_each_subset":
+                _log.warning(
+                    "RAMIS state_mode=reset_each_subset: la validacion se inicializa "
+                    "con su primer Qobs. Usar solo para comparaciones heredadas."
+                )
+                sim_train = self.run_ramis(train, offset=1)
+                sim_val = self.run_ramis(val, offset=999)
+            else:
+                raise ValueError(f"ramis_state_mode no soportado: {state_mode}")
 
         if mt in {"machine_learning", "hybrid", "hybrid_sequence"}:
             pred_train, pred_val = self._run_ml(train, val, sim_train, sim_val)

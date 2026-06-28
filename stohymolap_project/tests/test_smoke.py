@@ -180,3 +180,65 @@ def test_deterministic_calibration_forces_sigma_zero():
     assert np.allclose(result.top_k_table[:, 2], 0.0)
     assert result.diagnostics["use_stochastic"] is False
 
+
+
+def test_ramis_continuous_validation_does_not_use_validation_q0(tmp_path):
+    from stohymolap.calibration.monte_carlo_search import CalibrationResult
+    from stohymolap.experiments.runner import ExperimentRunner
+
+    dates = pd.date_range("2020-01-01", periods=8, freq="D")
+    train = pd.DataFrame({
+        "date": dates[:5],
+        "Qobs": [1.0, 1.1, 1.2, 1.3, 1.4],
+        "Peff": [0.0, 1.0, 0.0, 0.0, 0.0],
+        "P": [0.0, 1.0, 0.0, 0.0, 0.0],
+        "PET": [0.0] * 5,
+        "Tmin": [5.0] * 5,
+        "Tmax": [15.0] * 5,
+    })
+    val = pd.DataFrame({
+        "date": dates[5:],
+        "Qobs": [999.0, 2.0, 2.1],  # valor extremo: no debe inicializar la simulacion
+        "Peff": [0.0, 0.0, 0.0],
+        "P": [0.0, 0.0, 0.0],
+        "PET": [0.0] * 3,
+        "Tmin": [5.0] * 3,
+        "Tmax": [15.0] * 3,
+    })
+    cfg = {
+        "global": {"seed": 1, "output_root": str(tmp_path / "out")},
+        "pet": {},
+        "calibration": {},
+        "stochastic": {},
+        "baseflow": {"enabled": False},
+        "experiments": {
+            "E1_RAMIS_DET_BF": {
+                "description": "test",
+                "model_type": "physical",
+                "stochastic": False,
+                "baseflow": False,
+            }
+        },
+    }
+    runner = ExperimentRunner(cfg, "E1_RAMIS_DET_BF")
+    runner.cal_result = CalibrationResult(
+        best_params={
+            "mu": 0.8, "lambda": 2.5, "sigma": 0.0, "alpha": 2.0, "beta": 0.0,
+            "c_r": 0.0, "k_b": 0.001, "S0_b": 0.0, "n_top": 1,
+        },
+        top_k_table=np.zeros((1, 10)),
+        qq_best=np.zeros((8, 1)),
+        mean_trajectory=np.zeros(8),
+        inf_trajectory=np.zeros(8),
+        sup_trajectory=np.zeros(8),
+        alpha_area=1.0,
+        metrics={},
+        diagnostics={},
+    )
+
+    sim_train, sim_val = runner.run_ramis_continuous(train, val)
+
+    assert len(sim_train.q_total) == len(train)
+    assert len(sim_val.q_total) == len(val)
+    assert not np.isclose(sim_val.q_total[0], 999.0)
+    assert sim_val.q_total[0] < 10.0

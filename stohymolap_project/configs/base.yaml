@@ -20,6 +20,7 @@ global:
 
   # --- particion temporal (anti-leakage) ---
   train_fraction: 0.7        # 70% mas antiguo = calibracion; 30% = validacion
+  ramis_state_mode: continuous_train_validation  # no reinicia validacion con Qobs observado
   forecast_horizon: 1        # predecir Q(t+1) a partir de t, t-1, t-2 ...
   lags: [0, 1, 2]
 

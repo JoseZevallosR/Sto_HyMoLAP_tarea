@@ -20,6 +20,7 @@ global:
   fill_obs_with_sim: false
   csv_sep: ","
   train_fraction: 0.7
+  ramis_state_mode: continuous_train_validation
   forecast_horizon: 1
   lags: [0, 1, 2]
   seed: 42
