@@ -1,0 +1,7 @@
+%% E5: Hibrido XGB sobre Qmean
+flowchart LR
+    RAMIS["RAMIS-Levy + flujo base"] --> QMEAN["Qmean"]
+    QMEAN --> LAG["Qmean + rezagos"]
+    LAG --> XGB["XGBoost post-procesador"]
+    XGB --> QHAT["Qsim ML"]
+    QHAT --> EVAL["Metricas deterministicas"]

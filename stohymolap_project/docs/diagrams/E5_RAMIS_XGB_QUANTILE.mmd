@@ -1,7 +1,0 @@
-%% E5: Hibrido RAMIS-Levy -> XGBoost con cuantiles
-flowchart LR
-    RAMIS["RAMIS-Levy + flujo base"] --> SUMM["Qmean, q05..q95,<br/>anchos width_q95_q05, width_q75_q25"]
-    SUMM --> LAG["features + rezagos [0,1,2]"]
-    LAG --> XGB["XGBoost (post-procesador)"]
-    XGB --> QHAT["Q corregido"]
-    QHAT --> EVAL["Metricas det. + incertidumbre"]

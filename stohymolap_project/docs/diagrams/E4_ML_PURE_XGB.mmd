@@ -1,0 +1,6 @@
+%% E4: Machine Learning puro
+flowchart LR
+    F["Forzantes observadas<br/>P, PET, Tmin, Tmax"] --> LAG["Rezagos [0,1,2]"]
+    LAG --> XGB["XGBoost / fallback sklearn"]
+    XGB --> QPRED["Q predicho t+1"]
+    QPRED --> EVAL["Metricas deterministicas"]

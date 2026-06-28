@@ -1,7 +1,0 @@
-%% E3: Machine Learning puro (sin fisica)
-flowchart LR
-    F["Forzantes observadas<br/>P, PET, Tmin, Tmax"] --> LAG["Rezagos [0,1,2]"]
-    LAG --> SCALER["Escalado (fit solo en train)"]
-    SCALER --> XGB["XGBoost / HistGBR (fallback)"]
-    XGB --> QPRED["Q predicho (t+1)"]
-    QPRED --> EVAL["Metricas deterministicas"]

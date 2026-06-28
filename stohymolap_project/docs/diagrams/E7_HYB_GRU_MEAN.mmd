@@ -1,0 +1,7 @@
+%% E7: Hibrido secuencial GRU sobre Qmean
+flowchart LR
+    RAMIS["RAMIS-Levy + flujo base"] --> QMEAN["Secuencia Qmean"]
+    QMEAN --> SEQ["Ventanas longitud 7"]
+    SEQ --> GRU["GRU / MLP fallback"]
+    GRU --> QHAT["Qsim ML"]
+    QHAT --> EVAL["Metricas deterministicas"]

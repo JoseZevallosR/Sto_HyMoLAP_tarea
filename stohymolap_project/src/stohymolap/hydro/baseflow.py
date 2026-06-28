@@ -2,7 +2,7 @@
 
 Implementa un reservorio lineal diario que agrega persistencia/memoria a la
 respuesta rapida del modelo RAMIS. Es el aporte conceptual central de las
-ablaciones A1/A2 y se usa en E1, E2, E4-E7.
+ablaciones E0/E1 y E2/E3; se usa en E1, E3 y los híbridos E5-E8.
 
 Ecuaciones (paso diario):
 

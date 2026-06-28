@@ -99,7 +99,7 @@ Subconjunto o tolerante a fallos:
 
 ```bash
 python scripts/run_all_experiments.py --config configs/experiments.yaml \
-       --only E2_RAMIS_LEVY_BF A1_RAMIS_LEVY_NOBF --continue-on-error
+       --only E2_RAMIS_LEVY_NOBF E3_RAMIS_LEVY_BF --continue-on-error
 ```
 
 Regenerar solo la comparación (sin recalcular):
@@ -110,17 +110,28 @@ python scripts/summarize_results.py --config configs/experiments.yaml
 
 ## 5. Matriz de experimentos
 
-| ID | Modelo | Estocástico | Flujo base | ML |
-|----|--------|:----------:|:----------:|----|
-| **E1_RAMIS_DET_BF**     | físico determinístico        | – | ✔ | – |
-| **E2_RAMIS_LEVY_BF**    | físico estocástico (Lévy)    | ✔ | ✔ | – |
-| **E3_ML_PURE**          | ML puro                      | – | – | XGBoost |
-| **E4_RAMIS_XGB_MEAN**   | híbrido (media)              | ✔ | ✔ | XGBoost |
-| **E5_RAMIS_XGB_QUANTILE** | híbrido (cuantiles)        | ✔ | ✔ | XGBoost |
-| **E6_RAMIS_GRU_MEAN**   | híbrido secuencial (media)   | ✔ | ✔ | GRU |
-| **E7_RAMIS_GRU_QUANTILE** | híbrido secuencial (cuantiles) | ✔ | ✔ | GRU |
-| **A1_RAMIS_LEVY_NOBF**  | ablación: Lévy SIN flujo base | ✔ | ✖ | – |
-| **A2_RAMIS_LEVY_BF**    | ablación: Lévy CON flujo base | ✔ | ✔ | – |
+Fase 3.1 usa una matriz canónica sin duplicados. Los siete primeros son la
+matriz mínima publicable; E7/E8 son extensiones secuenciales opcionales.
+
+| ID | Modelo | Estocástico | Flujo base | ML | Rol |
+|----|--------|:----------:|:----------:|----|----|
+| **E0_RAMIS_DET_NOBF** | físico determinístico sin memoria | – | ✖ | – | mínimo |
+| **E1_RAMIS_DET_BF** | físico determinístico con memoria | – | ✔ | – | mínimo |
+| **E2_RAMIS_LEVY_NOBF** | físico estocástico Lévy sin memoria | ✔ | ✖ | – | mínimo |
+| **E3_RAMIS_LEVY_BF** | físico estocástico Lévy con memoria | ✔ | ✔ | – | mínimo |
+| **E4_ML_PURE_XGB** | ML puro sobre forzantes | – | ✖ | XGBoost | mínimo |
+| **E5_HYB_XGB_MEAN** | híbrido con media física | ✔ | ✔ | XGBoost | mínimo |
+| **E6_HYB_XGB_QUANTILES** | híbrido con cuantiles físicos | ✔ | ✔ | XGBoost | mínimo |
+| **E7_HYB_GRU_MEAN** | híbrido secuencial con media | ✔ | ✔ | GRU | extendido |
+| **E8_HYB_GRU_QUANTILES** | híbrido secuencial con cuantiles | ✔ | ✔ | GRU | extendido |
+
+Lecturas directas de ablación:
+
+- **Memoria hidrológica determinística:** E1 - E0.
+- **Memoria hidrológica estocástica:** E3 - E2.
+- **Ruido Lévy con memoria:** E3 - E1.
+- **ML puro vs física:** E4 - E3.
+- **Hibridación:** E5/E6/E7/E8 frente a E3 y E4.
 
 ## 6. Nuevos componentes científicos
 
@@ -152,7 +163,7 @@ Todas estas invariantes se verifican en `validation_checks.py`.
 
 `config_used.yaml`, `best_parameters.csv`, `top_k_parameters.csv`,
 `metrics_train.csv`, `metrics_validation.csv`, `metrics_by_regime.csv`,
-`uncertainty_metrics.csv` (estocásticos), `predictions_train.csv`,
+`uncertainty_metrics.csv` (solo físico-estocásticos donde la banda corresponde a Qsim), `physical_uncertainty_reference.csv` (híbridos), `predictions_train.csv`,
 `predictions_validation.csv`, `ensemble_summary.csv` (estocásticos),
 `model_artifact/` (modelos ML), `run.log`, y `figures/` con hidrogramas,
 dispersión, curva de duración, banda de incertidumbre, residuos por régimen y
@@ -162,20 +173,22 @@ diagrama de Taylor.
 
 `leaderboard.csv`, `experiment_matrix.csv`, `validation_metrics_comparison.csv`,
 `regime_metrics_comparison.csv`, `uncertainty_comparison.csv`,
-`best_model_summary.md` y `figures/` (barras de métricas, hidrogramas de los
+`ablation_effects.csv`, `best_model_summary.md` y `figures/` (barras de métricas, hidrogramas de los
 mejores modelos, comparación de curvas de duración y RMSE por régimen).
 
 ## 9. Cómo interpretar los resultados
 
-- **¿El flujo base ayuda?** Compara **A2 (con BF)** vs **A1 (sin BF)**: un
-  Δ(NSE/KGE) > 0 y menor RMSE en **caudales bajos** (`metrics_by_regime.csv`,
-  régimen `low`) indica que la memoria hidrológica mejora la recesión. El resumen
-  calcula automáticamente este Δ.
-- **¿La hibridación ayuda?** Compara **E2** (físico) vs **E4/E5/E6/E7** (híbridos)
-  y vs **E3** (ML puro). Si los híbridos superan tanto a E2 como a E3, el
-  post-procesamiento ML aporta sobre la física; si E3 ya gana, el ML domina la señal.
+- **¿El flujo base ayuda?** Compara **E1-E0** en RAMIS determinístico y
+  **E3-E2** en RAMIS-Lévy. Un Δ(NSE/KGE) > 0 y menor RMSE en caudales bajos
+  (`metrics_by_regime.csv`, régimen `low`) indica que la memoria hidrológica
+  mejora la recesión. `ablation_effects.csv` calcula estos Δ.
+- **¿La hibridación ayuda?** Compara **E3** (físico-estocástico completo) y
+  **E4** (ML puro) contra **E5/E6/E7/E8**. Si los híbridos superan a ambos,
+  el post-procesamiento ML aporta sobre la física; si E4 ya gana, el ML domina
+  la señal.
 - **Incertidumbre:** revisa `PICP` (idealmente ≈ 0.95) junto con `PINAW/MPIW`
-  (bandas más estrechas a igual cobertura son mejores) y `Winkler`.
+  y `Winkler` solo en modelos físico-estocásticos. En híbridos, la banda física
+  se guarda como referencia y no se reporta como incertidumbre final del Qsim ML.
 - **Cuidado con la calibración:** los valores de ejemplo usan números modestos
   (`n_param_samples`, `n_iter`, `n_trajectories`) para correr rápido. Para
   conclusiones científicas, súbelos (p. ej. 3000 / 1000 / 2000) en `configs`.

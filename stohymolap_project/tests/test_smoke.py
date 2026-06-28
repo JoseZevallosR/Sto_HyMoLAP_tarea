@@ -434,3 +434,45 @@ def test_phase26_physical_audit_passes_on_valid_outputs(tmp_path):
     assert result["status"] == "PASS"
     assert result["report_path"].exists()
     assert result["audit_issues"].empty
+
+
+
+def test_phase31_experiment_matrix_is_canonical():
+    from stohymolap.experiments.registry import CANONICAL_ORDER, DEPRECATED_EXPERIMENT_IDS, list_experiments
+    from stohymolap.utils.config import load_config
+
+    cfg = load_config(Path(__file__).resolve().parents[1] / "configs" / "experiments.yaml")
+    listed = list_experiments(cfg)
+
+    assert listed == CANONICAL_ORDER
+    assert "E0_RAMIS_DET_NOBF" in listed
+    assert "E2_RAMIS_LEVY_NOBF" in listed
+    assert "E3_RAMIS_LEVY_BF" in listed
+    for old_id in DEPRECATED_EXPERIMENT_IDS:
+        assert old_id not in listed
+
+
+def test_phase31_comparison_matrix_and_ablation_effects(tmp_path):
+    from stohymolap.experiments.comparison import (
+        build_ablation_effects,
+        build_experiment_matrix,
+    )
+    from stohymolap.experiments.registry import CANONICAL_ORDER
+
+    matrix = build_experiment_matrix(CANONICAL_ORDER)
+    assert matrix["experiment"].tolist() == CANONICAL_ORDER
+    row_e0 = matrix.set_index("experiment").loc["E0_RAMIS_DET_NOBF"]
+    row_e3 = matrix.set_index("experiment").loc["E3_RAMIS_LEVY_BF"]
+    assert not bool(row_e0["baseflow"])
+    assert bool(row_e3["estocastico"])
+    assert bool(row_e3["baseflow"])
+
+    results = pd.DataFrame([
+        {"experiment": "E2_RAMIS_LEVY_NOBF", "NSE": 0.30, "KGE": 0.40, "RMSE": 2.0, "MAE": 1.5, "PBIAS": 20.0, "n_eval": 100},
+        {"experiment": "E3_RAMIS_LEVY_BF", "NSE": 0.45, "KGE": 0.55, "RMSE": 1.7, "MAE": 1.2, "PBIAS": 10.0, "n_eval": 100},
+    ])
+    ab = build_ablation_effects(results).set_index("ablation")
+    assert "stochastic_baseflow" in ab.index
+    assert np.isclose(ab.loc["stochastic_baseflow", "delta_NSE"], 0.15)
+    assert np.isclose(ab.loc["stochastic_baseflow", "delta_RMSE"], -0.3)
+    assert np.isclose(ab.loc["stochastic_baseflow", "delta_abs_PBIAS_improvement"], 10.0)

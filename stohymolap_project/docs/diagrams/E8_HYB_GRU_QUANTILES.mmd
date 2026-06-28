@@ -1,0 +1,7 @@
+%% E8: Hibrido secuencial GRU con cuantiles
+flowchart LR
+    RAMIS["RAMIS-Levy + flujo base"] --> SUMM["Qmean, cuantiles,<br/>anchos, Qbase"]
+    SUMM --> SEQ["Ventanas longitud 7"]
+    SEQ --> GRU["GRU / MLP fallback"]
+    GRU --> QHAT["Qsim ML"]
+    QHAT --> EVAL["Metricas deterministicas"]

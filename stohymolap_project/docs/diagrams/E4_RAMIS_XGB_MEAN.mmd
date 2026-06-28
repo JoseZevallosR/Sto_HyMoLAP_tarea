@@ -1,7 +1,0 @@
-%% E4: Hibrido RAMIS-Levy -> XGBoost sobre la media
-flowchart LR
-    RAMIS["RAMIS-Levy + flujo base"] --> QMEAN["Qmean del ensemble"]
-    QMEAN --> LAG["Qmean + rezagos [0,1,2]"]
-    LAG --> XGB["XGBoost (post-procesador)"]
-    XGB --> QHAT["Q corregido"]
-    QHAT --> EVAL["Metricas deterministicas"]

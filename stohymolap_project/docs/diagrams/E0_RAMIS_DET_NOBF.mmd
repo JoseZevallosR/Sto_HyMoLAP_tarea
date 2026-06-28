@@ -1,0 +1,7 @@
+%% E0: RAMIS deterministico sin flujo base
+flowchart LR
+    P["P, Tmin, Tmax"] --> PET["PET Hargreaves-Samani"]
+    PET --> PEFF["Peff = max(P - PET, 0)"]
+    PEFF --> FAST["Reservorio rapido RAMIS<br/>(mu, lambda)"]
+    FAST --> QT["Qtotal = Qfast"]
+    QT --> EVAL["Metricas deterministicas"]

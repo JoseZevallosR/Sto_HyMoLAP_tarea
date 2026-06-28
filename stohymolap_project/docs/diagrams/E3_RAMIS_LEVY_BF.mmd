@@ -1,0 +1,10 @@
+%% E3: RAMIS-Levy con flujo base
+flowchart LR
+    PEFF["Peff"] --> MC["Monte Carlo"]
+    LEVY["Ruido alfa-estable<br/>(alpha, beta, sigma)"] --> MC
+    BF["Flujo base<br/>(c_r, k_b, S0_b)"] --> MC
+    MC --> ENS["Ensemble Qtotal"]
+    ENS --> QMEAN["Qmean"]
+    ENS --> QUANT["Cuantiles + banda IC95"]
+    QMEAN --> DET["Metricas deterministicas"]
+    QUANT --> UNC["Metricas de incertidumbre"]

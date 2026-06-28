@@ -1,8 +1,0 @@
-%% E6: Hibrido secuencial RAMIS-Levy -> GRU sobre la media
-flowchart LR
-    RAMIS["RAMIS-Levy + flujo base"] --> QMEAN["Secuencia de Qmean"]
-    QMEAN --> SEQ["Ventanas de longitud 7"]
-    SEQ --> SCALER["MinMax (fit solo en train)"]
-    SCALER --> GRU["GRU / MLP secuencial (fallback)"]
-    GRU --> QHAT["Q corregido (t+1)"]
-    QHAT --> EVAL["Metricas deterministicas"]

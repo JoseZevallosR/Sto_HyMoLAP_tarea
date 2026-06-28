@@ -9,7 +9,7 @@ Implementa el flujo descrito en el pliego:
 5. Calibra RAMIS si corresponde.             11. Predice train y validation.
 6. Ejecuta RAMIS det/estocastico.            12-14. Metricas, figuras y guardado.
 
-Un mismo runner cubre los 9 experimentos (E1-E7, A1-A2) seleccionando ramas
+Un mismo runner cubre la matriz Fase 3.1 seleccionando ramas
 segun ``model_type``, ``stochastic``, ``baseflow`` y ``ml_model``.
 """
 from __future__ import annotations
@@ -188,7 +188,7 @@ class ExperimentRunner:
                 lower=s["q025"], upper=s["q975"],
             )
 
-        # Deterministico (E1 / A1): Qfast sin ruido + baseflow opcional.
+        # Deterministico (E0/E1): Qfast sin ruido + baseflow opcional.
         q0_fast = quickflow_initial_from_total(
             q0, self.baseflow_params, use_baseflow=self.ec.use_baseflow
         )
@@ -412,9 +412,11 @@ class ExperimentRunner:
         regime_v.insert(0, "experiment", self.experiment_id)
         regime_v.to_csv(self.out_dir / "metrics_by_regime.csv", index=False)
 
-        # Incertidumbre (solo experimentos estocasticos con bandas en validacion).
-        # La banda se recorta a la cola para igualar la longitud de obs_v, que
-        # puede haberse acortado por lags/secuencias en los modelos ML.
+        # Incertidumbre: solo se reporta como uncertainty_metrics.csv cuando
+        # la banda corresponde al Qsim evaluado. En hibridos, Qsim es la salida
+        # ML post-procesada, mientras que la banda proviene del ensemble fisico;
+        # por eso se guarda aparte como referencia fisica y no entra al ranking
+        # de incertidumbre del modelo final.
         unc = {}
         lo_v = up_v = None
         if sim_val is not None and sim_val.lower is not None:
@@ -422,8 +424,14 @@ class ExperimentRunner:
             lo_v = np.asarray(sim_val.lower, dtype=float)[-m:]
             up_v = np.asarray(sim_val.upper, dtype=float)[-m:]
             checks.check_quantiles_ordered(lo_v, up_v)
-            unc = all_uncertainty(obs_v, lo_v, up_v, alpha=0.05)
-            pd.DataFrame([unc]).to_csv(self.out_dir / "uncertainty_metrics.csv", index=False)
+            band_metrics = all_uncertainty(obs_v, lo_v, up_v, alpha=0.05)
+            if mt == "stochastic_physical":
+                unc = band_metrics
+                pd.DataFrame([unc]).to_csv(self.out_dir / "uncertainty_metrics.csv", index=False)
+            else:
+                pd.DataFrame([band_metrics]).to_csv(
+                    self.out_dir / "physical_uncertainty_reference.csv", index=False
+                )
 
         # Predicciones.
         pd.DataFrame({"date": dates_tr, "Qobs": obs_tr, "Qsim": sim_tr}).to_csv(
@@ -460,7 +468,7 @@ class ExperimentRunner:
                                  self.fig_dir / "residuals_by_regime.png")
         plot_taylor(obs_v, sim_v, f"{self.experiment_id} Taylor (val)",
                     self.fig_dir / "taylor_diagram.png")
-        if lo_plot is not None:
+        if lo_plot is not None and mt == "stochastic_physical":
             plot_uncertainty_band(obs_v, sim_v, lo_plot, up_plot,
                                   f"{self.experiment_id} banda incertidumbre",
                                   self.fig_dir / "uncertainty_band.png", dates=dates_v)
@@ -473,6 +481,7 @@ class ExperimentRunner:
             "metrics_train": det_tr,
             "uncertainty": unc,
             "regime": regime_v,
+            "n_eval_validation": int(len(obs_v)),
             "backend": getattr(self, "_ml_backend", "physical"),
         }
 
