@@ -156,6 +156,7 @@ run_cmd "Git last commits" git --no-pager log --oneline -n 12
 run_cmd "Git status short" git status --short
 run_cmd "Git diff stat" git diff --stat
 run_cmd "Git tracked files summary" git ls-files
+run_cmd "Archivos Python directos del paquete" bash -lc 'find src/stohymolap -maxdepth 1 -type f -name "*.py" -print | sort'
 
 run_cmd "Árbol compacto del proyecto" bash -lc \
   'find . -maxdepth 4 \
@@ -174,6 +175,13 @@ append_file_head ".gitignore" 160 ".gitignore"
 append_file_head "README.md" 220 "README.md"
 append_file_head "configs/base.yaml" 220 "configs/base.yaml"
 append_file_head "configs/experiments.yaml" 300 "configs/experiments.yaml"
+append_file_head "configs/model_bounds.yaml" 220 "configs/model_bounds.yaml si existe"
+append_file_head "data/ramis_hydro.csv" 80 "data/ramis_hydro.csv HEAD si existe"
+append_file_head "src/stohymolap/__init__.py" 120 "src/stohymolap/__init__.py"
+append_file_head "src/stohymolap/validation_checks.py" 260 "src/stohymolap/validation_checks.py"
+append_file_head "scripts/run_experiment.py" 180 "scripts/run_experiment.py"
+append_file_head "scripts/run_all_experiments.py" 180 "scripts/run_all_experiments.py"
+append_file_head "scripts/summarize_results.py" 180 "scripts/summarize_results.py"
 append_file_head "outputs/comparison/physical_audit_status.txt" 60 "physical_audit_status"
 append_file_head "outputs/comparison/physical_audit_report.md" 220 "physical_audit_report.md"
 append_file_head "outputs/comparison/physical_audit_issues.csv" 120 "physical_audit_issues.csv"
@@ -276,8 +284,13 @@ for f in \
   "generar_contexto.sh" \
   "configs/base.yaml" \
   "configs/experiments.yaml" \
+  "configs/model_bounds.yaml" \
+  "scripts/run_experiment.py" \
   "scripts/run_all_experiments.py" \
+  "scripts/summarize_results.py" \
   "scripts/audit_physical_phase26.py" \
+  "src/stohymolap/__init__.py" \
+  "src/stohymolap/validation_checks.py" \
   "tests/test_smoke.py"
 do
   if [[ -f "$f" ]]; then
@@ -286,6 +299,16 @@ do
     echo "$f" >> "$MANIFEST"
   fi
 done
+
+# Copia módulos Python ubicados directamente en src/stohymolap/.
+# Esto evita perder archivos como validation_checks.py o __init__.py al generar contexto.
+if [[ -d "src/stohymolap" ]]; then
+  mkdir -p "${WORK_DIR}/repo/src/stohymolap"
+  find "src/stohymolap" -maxdepth 1 -type f -name "*.py" -print0 | while IFS= read -r -d '' f; do
+    cp "$f" "${WORK_DIR}/repo/src/stohymolap/"
+    echo "$f" >> "$MANIFEST"
+  done
+fi
 
 for d in \
   "src/stohymolap/data" \
@@ -309,6 +332,20 @@ do
     echo "$d" >> "$MANIFEST"
   fi
 done
+
+# Datos de ejemplo: solo HEAD para evitar paquetes pesados.
+if [[ -f "data/ramis_hydro.csv" ]]; then
+  mkdir -p "${WORK_DIR}/repo/data"
+  head -n 300 "data/ramis_hydro.csv" > "${WORK_DIR}/repo/data/ramis_hydro_HEAD.csv"
+  echo "data/ramis_hydro.csv -> HEAD" >> "$MANIFEST"
+fi
+
+# Diagramas/documentación liviana, si existe.
+if [[ -d "docs/diagrams" ]]; then
+  mkdir -p "${WORK_DIR}/repo/docs"
+  rsync -a --exclude="__pycache__" --exclude="*.pyc" "docs/diagrams" "${WORK_DIR}/repo/docs/"
+  echo "docs/diagrams" >> "$MANIFEST"
+fi
 
 # Reportes y CSV pequeños de auditoría/comparación.
 mkdir -p "${WORK_DIR}/repo/outputs/comparison"

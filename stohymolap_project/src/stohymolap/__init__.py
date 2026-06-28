@@ -1,7 +1,18 @@
-"""StoHyMoLAP / RAMIS: plataforma experimental lluvia-escorrentía.
+"""StoHyMoLAP: framework experimental RAMIS / lluvia-escorrentía.
 
-Marco modular para comparar modelos hidrológicos determinísticos,
-estocásticos (Lévy + Monte Carlo), de machine learning puro e híbridos
-RAMIS-ML, con memoria hidrológica mediante un reservorio de baseflow.
+El paquete expone módulos de datos, física hidrológica, calibración,
+experimentos, métricas y validaciones anti-fuga. Mantener este archivo permite
+que imports como ``import stohymolap`` funcionen tanto en instalación editable
+como al ejecutar scripts desde el árbol del repositorio.
 """
-__version__ = "0.2.0"
+from __future__ import annotations
+
+try:  # pragma: no cover - depende de si el paquete está instalado
+    from importlib.metadata import version
+
+    __version__ = version("stohymolap")
+except Exception:  # noqa: BLE001
+    __version__ = "0.1.0"
+
+__all__ = ["__version__"]
+
