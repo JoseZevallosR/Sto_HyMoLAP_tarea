@@ -218,3 +218,34 @@ mejores modelos, comparación de curvas de duración y RMSE por régimen).
 
 > Las salidas incluidas se generaron con la configuración de ejemplo y sirven como
 > demostración; vuelve a ejecutar con tus datos y tu presupuesto de cómputo.
+
+## Fase 3.4A — Auditoría anti-leakage y QA
+
+La Fase 3.4A agrega una auditoría reproducible antes de preparar figuras y tablas publicables. La auditoría revisa:
+
+- separación temporal estricta entre calibración y validación;
+- lags no negativos y secuencias formadas solo con información hasta `t` para predecir `t+horizon`;
+- ausencia de `Qobs`/target observado dentro de las variables predictoras;
+- consistencia entre `evaluation_window.json` y los CSV de predicciones;
+- origen de umbrales de régimen como `train_Qobs_only`;
+- backend ML usado realmente, distinguiendo GRU real (`tensorflow`/`torch`) de fallback `sklearn_mlp`;
+- aplicación del postproceso `Qsim = max(Qsim_raw, 0)` solo a ML/híbridos.
+
+Uso recomendado después de ejecutar o resumir la matriz:
+
+```bash
+python scripts/audit_leakage_phase34.py --config configs/experiments.yaml
+```
+
+Artefactos generados en `outputs/comparison/`:
+
+- `leakage_audit_report.md`
+- `leakage_audit_summary.csv`
+- `leakage_audit_issues.csv`
+- `leakage_audit.json`
+
+Además, cada corrida nueva guarda en el directorio de cada experimento:
+
+- `ml_backend.json`
+- `regime_thresholds.json`
+- `leakage_manifest.json`

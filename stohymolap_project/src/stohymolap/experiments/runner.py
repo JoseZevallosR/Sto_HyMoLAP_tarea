@@ -51,6 +51,17 @@ from .. import validation_checks as checks  # type: ignore
 _log = get_logger("experiments.runner")
 
 
+def _read_json_safe(path: Path) -> Dict[str, Any]:
+    """Lee JSON si existe; devuelve {} si aun no fue creado."""
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 @dataclass
 class _SimBundle:
     """Salida de RAMIS para un subconjunto (train o val)."""
@@ -356,8 +367,38 @@ class ExperimentRunner:
             }
 
         self._ml_backend = getattr(model, "backend", "unknown")
+        self._save_ml_backend_report(model)
         model.save(self.out_dir / "model_artifact" / "model.joblib")
         return ptr, pv
+
+    def _save_ml_backend_report(self, model) -> None:
+        """Guarda evidencia del backend ML realmente usado.
+
+        En particular, E7/E8 pueden declararse como GRU pero caer en
+        ``sklearn_mlp`` si TensorFlow/PyTorch no estan instalados. Este archivo
+        evita ambiguedad al redactar resultados publicables.
+        """
+        backend = str(getattr(model, "backend", "unknown"))
+        ml_model = str(self.ec.ml_model or "")
+        if ml_model == "gru" and backend in {"tensorflow", "torch"}:
+            label = "real_gru"
+        elif ml_model == "gru" and backend == "sklearn_mlp":
+            label = "fallback_mlp_on_flattened_sequences"
+        elif ml_model:
+            label = backend
+        else:
+            label = "physical"
+        report = {
+            "experiment_id": self.experiment_id,
+            "model_type": self.ec.model_type,
+            "ml_model": ml_model,
+            "backend": backend,
+            "backend_label": label,
+            "is_real_gru": bool(ml_model == "gru" and backend in {"tensorflow", "torch"}),
+        }
+        (self.out_dir / "ml_backend.json").write_text(
+            json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
 
     def _save_physical_components(self, subset: pd.DataFrame, sim: Optional[_SimBundle], split: str) -> None:
         """Guarda componentes RAMIS/baseflow para auditoria fisica.
@@ -456,6 +497,16 @@ class ExperimentRunner:
 
         # Umbrales de regimen definidos en CALIBRACION (no en validacion).
         p25, p75 = regime_thresholds(train["Qobs"].to_numpy())
+        regime_meta = {
+            "source": "train_Qobs_only",
+            "p25": float(p25),
+            "p75": float(p75),
+            "n_train_finite_qobs": int(np.isfinite(train["Qobs"].to_numpy(dtype=float)).sum()),
+            "note": "Los regimenes de validation usan umbrales estimados solo con Qobs de calibracion.",
+        }
+        (self.out_dir / "regime_thresholds.json").write_text(
+            json.dumps(regime_meta, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         regime_v = metrics_by_regime(obs_v, sim_v, p25, p75)
         regime_v.insert(0, "experiment", self.experiment_id)
         regime_v.to_csv(self.out_dir / "metrics_by_regime.csv", index=False)
@@ -526,6 +577,12 @@ class ExperimentRunner:
                                   f"{self.experiment_id} banda incertidumbre",
                                   self.fig_dir / "uncertainty_band.png", dates=dates_v)
 
+        self._save_leakage_manifest(
+            train=train, val=val, dates_tr=dates_tr, dates_v=dates_v,
+            win_tr=win_tr, win_v=win_v, regime_meta=regime_meta,
+            postprocess=postprocess, n_eval_train=len(obs_tr), n_eval_validation=len(obs_v),
+        )
+
         return {
             "experiment": self.experiment_id,
             "description": self.ec.description,
@@ -539,6 +596,61 @@ class ExperimentRunner:
             "evaluation_window": {**window.to_dict(), "train": win_tr, "validation": win_v},
             "backend": getattr(self, "_ml_backend", "physical"),
         }
+
+    def _save_leakage_manifest(
+        self, *, train, val, dates_tr, dates_v, win_tr, win_v,
+        regime_meta: Dict[str, Any], postprocess: Dict[str, Any],
+        n_eval_train: int, n_eval_validation: int,
+    ) -> None:
+        """Guarda un manifiesto compacto para auditoria anti-leakage.
+
+        Este archivo es deliberadamente redundante con otros outputs: facilita
+        revisar cada experimento sin abrir el codigo fuente.
+        """
+
+        def _bounds(dates) -> Dict[str, Any]:
+            d = pd.to_datetime(pd.Series(dates), errors="coerce").dropna()
+            if d.empty:
+                return {"start": None, "end": None, "n": 0}
+            return {
+                "start": d.min().date().isoformat(),
+                "end": d.max().date().isoformat(),
+                "n": int(len(d)),
+            }
+
+        feature_spec = self.ec.feature_spec or {}
+        ml_backend = _read_json_safe(self.out_dir / "ml_backend.json")
+        target_alignment = {
+            "forecast_horizon": int(self.ec.glob.get("forecast_horizon", 1)),
+            "rule": "features hasta t; target Qobs en t+horizon",
+            "lags": [int(x) for x in self.ec.lags],
+            "sequence_length": int(self.ec.sequence_length) if self.ec.model_type == "hybrid_sequence" else None,
+            "uses_validation_qobs_as_feature": False,
+        }
+        manifest = {
+            "experiment_id": self.experiment_id,
+            "model_type": self.ec.model_type,
+            "ml_model": self.ec.ml_model,
+            "ramis_state_mode": self.ec.glob.get("ramis_state_mode", "continuous_train_validation"),
+            "raw_split_periods": {
+                "train": _bounds(train["date"].to_numpy()),
+                "validation": _bounds(val["date"].to_numpy()),
+            },
+            "evaluated_periods": {
+                "train": {**_bounds(dates_tr), "n_eval": int(n_eval_train)},
+                "validation": {**_bounds(dates_v), "n_eval": int(n_eval_validation)},
+            },
+            "evaluation_window": {"train": win_tr, "validation": win_v},
+            "feature_source": feature_spec.get("source", "physical_only"),
+            "feature_variables": feature_spec.get("variables", []),
+            "target_alignment": target_alignment,
+            "regime_thresholds": regime_meta,
+            "postprocessing": postprocess,
+            "ml_backend": ml_backend or {"backend": getattr(self, "_ml_backend", "physical")},
+        }
+        (self.out_dir / "leakage_manifest.json").write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
 
     def _postprocess_qsim(self, sim_tr_raw: np.ndarray, sim_v_raw: np.ndarray):
         """Aplica restricciones fisicas finales a predicciones ML/hibridas.

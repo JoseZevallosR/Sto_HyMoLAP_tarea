@@ -19,6 +19,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from stohymolap.diagnostics.leakage_audit import audit_leakage  # noqa: E402
 from stohymolap.experiments.comparison import run_comparison  # noqa: E402
 from stohymolap.experiments.registry import list_experiments, run_experiment  # noqa: E402
 from stohymolap.utils.config import deep_merge, load_config  # noqa: E402
@@ -81,9 +82,16 @@ def main(argv=None) -> int:
 
     exp_root = Path(cfg.get("global", {}).get("output_root", "outputs/experiments"))
     leaderboard = run_comparison(exp_root, comparison_root, completed)
+    leakage = audit_leakage(cfg, exp_root, comparison_root, completed, write=True)
 
     if not leaderboard.empty:
         _log.info("Leaderboard:\n%s", leaderboard.to_string(index=False))
+    _log.info("Auditoria leakage Fase 3.4A: %s", leakage["status"])
+    if leakage["status"] == "FAIL":
+        raise RuntimeError(
+            "La auditoria anti-leakage Fase 3.4A fallo. "
+            f"Revisa {leakage['report_path']}"
+        )
     _log.info("Listo. Comparacion en %s", comparison_root)
     return 0
 

@@ -5,6 +5,7 @@ corre de extremo a extremo sobre un dataset pequeño sintético.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -614,3 +615,134 @@ def test_phase33_common_intersection_metrics_align_dates(tmp_path):
     assert out["common_start_date"].iloc[0] == "2020-01-03"
     assert out["common_end_date"].iloc[0] == "2020-01-05"
     assert np.allclose(out["NSE"], 1.0)
+
+
+def test_phase34a_leakage_audit_passes_on_clean_outputs(tmp_path):
+    from stohymolap.diagnostics.leakage_audit import audit_leakage
+
+    exp_root = tmp_path / "experiments"
+    comp_root = tmp_path / "comparison"
+    eid = "E4_ML_PURE_XGB"
+    exp_dir = exp_root / eid
+    exp_dir.mkdir(parents=True)
+
+    train_dates = pd.date_range("2020-01-01", periods=5, freq="D")
+    val_dates = pd.date_range("2020-01-06", periods=4, freq="D")
+    pd.DataFrame({"date": train_dates, "Qobs": np.arange(5.0), "Qsim": np.arange(5.0)}).to_csv(
+        exp_dir / "predictions_train.csv", index=False
+    )
+    pd.DataFrame({"date": val_dates, "Qobs": np.arange(4.0), "Qsim": np.arange(4.0)}).to_csv(
+        exp_dir / "predictions_validation.csv", index=False
+    )
+    (exp_dir / "evaluation_window.json").write_text(
+        json.dumps({
+            "enabled": True,
+            "mode": "declared_matrix_max_warmup",
+            "start_offset": 3,
+            "end_trim": 0,
+            "train": {"start_date": "2020-01-01", "end_date": "2020-01-05", "n_after": 5},
+            "validation": {"start_date": "2020-01-06", "end_date": "2020-01-09", "n_after": 4},
+        }),
+        encoding="utf-8",
+    )
+    (exp_dir / "postprocessing_report.json").write_text(
+        json.dumps({"applied": True, "method": "clip_negative_to_zero", "validation": {"n_negative_raw": 0}}),
+        encoding="utf-8",
+    )
+    (exp_dir / "regime_thresholds.json").write_text(
+        json.dumps({"source": "train_Qobs_only", "p25": 1.0, "p75": 3.0, "n_train_finite_qobs": 5}),
+        encoding="utf-8",
+    )
+    (exp_dir / "ml_backend.json").write_text(
+        json.dumps({"backend": "sklearn_hgb", "backend_label": "sklearn_hgb"}),
+        encoding="utf-8",
+    )
+    comp_root.mkdir(parents=True)
+    pd.DataFrame({"experiment": [eid], "n_eval": [4]}).to_csv(
+        comp_root / "leaderboard_common_intersection.csv", index=False
+    )
+
+    cfg = {
+        "global": {
+            "forecast_horizon": 1,
+            "lags": [0, 1, 2],
+            "ramis_state_mode": "continuous_train_validation",
+            "output_root": str(exp_root),
+        },
+        "experiments": {
+            eid: {
+                "model_type": "machine_learning",
+                "ml_model": "xgboost",
+                "features": {"source": "observed_forcing", "variables": ["P", "PET"], "lags": [0, 1, 2]},
+            }
+        },
+    }
+
+    result = audit_leakage(cfg, exp_root, comp_root, [eid], write=True)
+
+    assert result["status"] == "PASS"
+    assert result["report_path"].exists()
+    issues = result["audit_issues"]
+    assert not issues[issues["severity"].isin(["WARN", "ERROR"])].any().any()
+
+
+def test_phase34a_leakage_audit_detects_temporal_overlap(tmp_path):
+    from stohymolap.diagnostics.leakage_audit import audit_leakage
+
+    exp_root = tmp_path / "experiments"
+    comp_root = tmp_path / "comparison"
+    eid = "E4_ML_PURE_XGB"
+    exp_dir = exp_root / eid
+    exp_dir.mkdir(parents=True)
+
+    pd.DataFrame({
+        "date": pd.date_range("2020-01-01", periods=5, freq="D"),
+        "Qobs": np.arange(5.0),
+        "Qsim": np.arange(5.0),
+    }).to_csv(exp_dir / "predictions_train.csv", index=False)
+    pd.DataFrame({
+        "date": pd.date_range("2020-01-05", periods=3, freq="D"),
+        "Qobs": np.arange(3.0),
+        "Qsim": np.arange(3.0),
+    }).to_csv(exp_dir / "predictions_validation.csv", index=False)
+    (exp_dir / "evaluation_window.json").write_text(
+        json.dumps({
+            "train": {"start_date": "2020-01-01", "end_date": "2020-01-05", "n_after": 5},
+            "validation": {"start_date": "2020-01-05", "end_date": "2020-01-07", "n_after": 3},
+        }),
+        encoding="utf-8",
+    )
+    (exp_dir / "postprocessing_report.json").write_text(
+        json.dumps({"applied": True, "method": "clip_negative_to_zero", "validation": {"n_negative_raw": 0}}),
+        encoding="utf-8",
+    )
+    (exp_dir / "regime_thresholds.json").write_text(json.dumps({"source": "train_Qobs_only"}), encoding="utf-8")
+    (exp_dir / "ml_backend.json").write_text(json.dumps({"backend": "sklearn_hgb"}), encoding="utf-8")
+    comp_root.mkdir(parents=True)
+    pd.DataFrame({"experiment": [eid], "n_eval": [3]}).to_csv(comp_root / "leaderboard_common_intersection.csv", index=False)
+
+    cfg = {
+        "global": {"forecast_horizon": 1, "lags": [0, 1], "ramis_state_mode": "continuous_train_validation", "output_root": str(exp_root)},
+        "experiments": {
+            eid: {
+                "model_type": "machine_learning",
+                "ml_model": "xgboost",
+                "features": {"source": "observed_forcing", "variables": ["P"], "lags": [0, 1]},
+            }
+        },
+    }
+
+    result = audit_leakage(cfg, exp_root, comp_root, [eid], write=False)
+
+    assert result["status"] == "FAIL"
+    checks = set(result["audit_issues"].loc[result["audit_issues"]["severity"] == "ERROR", "check"])
+    assert "temporal_split_no_overlap" in checks
+    assert "temporal_split_order" in checks
+
+
+def test_phase34a_backend_classifier_marks_gru_fallback():
+    from stohymolap.diagnostics.leakage_audit import classify_backend
+
+    assert classify_backend("gru", "tensorflow") == "real_gru"
+    assert classify_backend("gru", "torch") == "real_gru"
+    assert classify_backend("gru", "sklearn_mlp") == "fallback_mlp_on_flattened_sequences"
