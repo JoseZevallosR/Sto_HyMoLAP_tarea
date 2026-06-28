@@ -29,3 +29,8 @@ __pycache__/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/

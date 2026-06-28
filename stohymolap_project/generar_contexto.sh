@@ -1,417 +1,470 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# generar_contexto.sh — StoHyMoLAP cierre Fase 2 / entrada Fase 3
-#
-# Uso:
-#   bash generar_contexto.sh
+# Generador de contexto — StoHyMoLAP Fase 3.4
+# Uso recomendado desde la raíz del repo:
 #   bash generar_contexto.sh --with-tests
-#   bash generar_contexto.sh --with-audit
-#   bash generar_contexto.sh --with-tests --with-audit
-#
-# Salidas:
-#   contextos/stohymolap_contexto_fase3_YYYYMMDD_HHMMSS.md
-#   contextos/prompt_siguiente_chat_fase3_YYYYMMDD_HHMMSS.md
-#   contextos/stohymolap_contexto_fase3_YYYYMMDD_HHMMSS.tar.gz
 #
 # Objetivo:
-#   Preparar un paquete compacto para continuar en otro chat con Fase 3:
-#   ablaciones, matriz experimental publicable, outputs comparables y figuras/tablas.
+#   Empaquetar el estado actual después de Fase 3.3A para continuar en otro chat
+#   con Fase 3.4: figuras, tablas finales, auditoría de leakage y redacción publicable.
+#
+# Este script NO modifica el repo. Solo lee archivos y genera:
+#   contextos/stohymolap_contexto_fase3_4_<timestamp>/
+#   contextos/stohymolap_contexto_fase3_4_<timestamp>.tar.gz
+
+PROJECT_ROOT="$(pwd)"
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+CONTEXT_BASENAME="stohymolap_contexto_fase3_4_${TIMESTAMP}"
+CONTEXT_ROOT="contextos/${CONTEXT_BASENAME}"
+FILES_ROOT="${CONTEXT_ROOT}/files"
+REPORT_MD="${CONTEXT_ROOT}/contexto_stohymolap_fase3_4.md"
+PROMPT_MD="${CONTEXT_ROOT}/prompt_siguiente_chat_fase3_4.md"
+MANIFEST_TXT="${CONTEXT_ROOT}/manifest.txt"
+PKG_FILE="contextos/${CONTEXT_BASENAME}.tar.gz"
 
 WITH_TESTS=0
-WITH_AUDIT=0
+WITH_FULL_DIFF=0
+WITH_OUTPUTS=1
+WITH_DATA_HEAD=1
+WITH_ENV=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-tests)
       WITH_TESTS=1
-      shift
       ;;
-    --with-audit)
-      WITH_AUDIT=1
-      shift
+    --with-full-diff)
+      WITH_FULL_DIFF=1
+      ;;
+    --no-outputs)
+      WITH_OUTPUTS=0
+      ;;
+    --no-data-head)
+      WITH_DATA_HEAD=0
+      ;;
+    --no-env)
+      WITH_ENV=0
       ;;
     -h|--help)
-      sed -n '1,40p' "$0"
+      cat <<'EOF'
+Uso:
+  bash generar_contexto.sh [opciones]
+
+Opciones:
+  --with-tests      Ejecuta pytest -q y guarda el resultado.
+  --with-full-diff  Incluye git diff completo, excluyendo pycache y .pyc.
+  --no-outputs      No copia outputs/comparison ni resúmenes por experimento.
+  --no-data-head    No incluye cabeceras/muestras de data/*.csv.
+  --no-env          No guarda versiones del entorno Python.
+EOF
       exit 0
       ;;
     *)
-      echo "Argumento no reconocido: $1" >&2
-      exit 1
+      echo "Opción no reconocida: $1" >&2
+      exit 2
       ;;
   esac
+  shift
 done
 
-PROJECT_ROOT="$(pwd)"
-TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-OUT_DIR="contextos"
-WORK_DIR="${OUT_DIR}/stohymolap_contexto_fase3_${TIMESTAMP}"
-CONTEXT_MD="${WORK_DIR}/contexto_stohymolap_fase3.md"
-PROMPT_MD="${WORK_DIR}/prompt_siguiente_chat_fase3.md"
-MANIFEST="${WORK_DIR}/manifest.txt"
-ARCHIVE="${OUT_DIR}/stohymolap_contexto_fase3_${TIMESTAMP}.tar.gz"
+mkdir -p "$FILES_ROOT"
 
-mkdir -p "$WORK_DIR"
-
-run_cmd() {
-  local title="$1"
+run_capture() {
+  local outfile="$1"
   shift
   {
+    echo "\$ $*"
     echo
-    echo "## ${title}"
+    "$@"
+  } > "$outfile" 2>&1 || {
+    local rc=$?
     echo
-    echo '```text'
-    "$@" 2>&1 || true
-    echo '```'
-  } >> "$CONTEXT_MD"
+    echo "[WARN] comando falló con código ${rc}" >> "$outfile"
+    return 0
+  }
 }
 
-append_file_head() {
+copy_file() {
+  local src="$1"
+  [[ -f "$src" ]] || return 0
+  local dst="${FILES_ROOT}/${src}"
+  mkdir -p "$(dirname "$dst")"
+  cp -a "$src" "$dst"
+}
+
+copy_dir() {
+  local src="$1"
+  [[ -d "$src" ]] || return 0
+  local dst="${FILES_ROOT}/${src}"
+  mkdir -p "$(dirname "$dst")"
+  cp -a "$src" "$dst"
+  find "$dst" -type d -name "__pycache__" -prune -exec rm -rf {} + 2>/dev/null || true
+  find "$dst" -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.pyd" \) -delete 2>/dev/null || true
+  find "$dst" -type d -name ".pytest_cache" -prune -exec rm -rf {} + 2>/dev/null || true
+}
+
+append_file_section() {
   local file="$1"
-  local lines="${2:-120}"
-  local title="${3:-$file}"
+  local title="${2:-$file}"
   {
     echo
     echo "## ${title}"
+    echo
     if [[ -f "$file" ]]; then
-      echo
-      echo "\`${file}\`"
-      echo
       echo '```text'
-      sed -n "1,${lines}p" "$file" || true
+      sed -n '1,220p' "$file"
+      local nlines
+      nlines="$(wc -l < "$file" | tr -d ' ')"
+      if [[ "${nlines}" -gt 220 ]]; then
+        echo
+        echo "[TRUNCADO: ${nlines} líneas totales; se muestran las primeras 220]"
+      fi
       echo '```'
     else
-      echo
-      echo "No existe: \`${file}\`"
+      echo "_No existe: ${file}_"
     fi
-  } >> "$CONTEXT_MD"
+  } >> "$REPORT_MD"
 }
 
-copy_if_exists() {
-  local src="$1"
-  local dst_dir="$2"
-  if [[ -e "$src" ]]; then
-    mkdir -p "$dst_dir"
-    cp -a "$src" "$dst_dir/"
-    echo "$src" >> "$MANIFEST"
-  fi
+write_text_file() {
+  local dst="$1"
+  mkdir -p "$(dirname "$dst")"
+  cat > "$dst"
 }
 
-copy_selected_csv() {
-  local src="$1"
-  local dst_dir="$2"
-  if [[ -f "$src" ]]; then
-    mkdir -p "$dst_dir"
-    cp "$src" "$dst_dir/"
-    echo "$src" >> "$MANIFEST"
-  fi
-}
-
-# Evitar arrastrar basura temporal de Python al paquete.
-find . -type d -name "__pycache__" -prune -exec rm -rf {} + 2>/dev/null || true
-find . -name "*.pyc" -delete 2>/dev/null || true
-
-cat > "$CONTEXT_MD" <<EOF
-# Contexto StoHyMoLAP para Fase 3
-
-Generado: ${TIMESTAMP}
-
-Directorio raíz:
-
-\`\`\`text
-${PROJECT_ROOT}
-\`\`\`
-
-## Estado conceptual
-
-Fase 0/1 cerrada:
-- Importación e instalación editable funcionando.
-- Datos cargados sin relleno silencioso de Qobs con Qsim.
-- Trazabilidad de origen Qobs: observed/missing/filled_from_qsim.
-- Reproducibilidad agregada a config_used.
-
-Fase 2 cerrada:
-- Baseflow escalado con alpha_area.
-- E1 determinístico calibra sin ruido Lévy.
-- RAMIS/baseflow corre de forma continua entre train y validation.
-- Qfast/Qbase consistente en t0.
-- Parámetros RAMIS validados para estabilidad.
-- Selección de parámetros por J multiobjetivo con strategy=best_j.
-- Auditoría física E1/E2 implementada.
-
-Resultado auditoría real Fase 2.6:
-- Estado: WARN aceptable/metodológicamente justificable.
-- Incidencia: PBIAS absoluto >100% solo en régimen bajo de E1.
-- Métricas globales de validación aceptables:
-  - E1 validation NSE ≈ 0.437, KGE ≈ 0.714, PBIAS ≈ 1.09%, Qsim/Qobs ≈ 1.009.
-  - E2 validation NSE ≈ 0.426, KGE ≈ 0.724, PBIAS ≈ -0.92%, Qsim/Qobs ≈ 0.989.
-
-Objetivo del siguiente chat:
-- Entrar a Fase 3: matriz experimental de ablaciones publicable.
-- Comparar RAMIS determinístico, RAMIS+Lévy, baseflow/memoria hidrológica, y componentes híbridos/ML sin crear repositorios separados.
-EOF
-
-run_cmd "Git branch" git branch --show-current
-run_cmd "Git last commits" git --no-pager log --oneline -n 12
-run_cmd "Git status short" git status --short
-run_cmd "Git diff stat" git diff --stat
-run_cmd "Git tracked files summary" git ls-files
-run_cmd "Archivos Python directos del paquete" bash -lc 'find src/stohymolap -maxdepth 1 -type f -name "*.py" -print | sort'
-
-run_cmd "Árbol compacto del proyecto" bash -lc \
-  'find . -maxdepth 4 \
-    -path "./.git" -prune -o \
-    -path "./outputs/experiments/*/predictions*" -prune -o \
-    -path "./outputs/experiments/*/physical_components*" -prune -o \
-    -path "./outputs/experiments/*/ensemble*" -prune -o \
-    -path "./contextos" -prune -o \
-    -path "./data" -prune -o \
-    -path "./__pycache__" -prune -o \
-    -type f -print | sort | sed "s#^\./##"'
-
-append_file_head "pyproject.toml" 160 "pyproject.toml"
-append_file_head "requirements.txt" 180 "requirements.txt"
-append_file_head ".gitignore" 160 ".gitignore"
-append_file_head "README.md" 220 "README.md"
-append_file_head "configs/base.yaml" 220 "configs/base.yaml"
-append_file_head "configs/experiments.yaml" 300 "configs/experiments.yaml"
-append_file_head "configs/model_bounds.yaml" 220 "configs/model_bounds.yaml si existe"
-append_file_head "data/ramis_hydro.csv" 80 "data/ramis_hydro.csv HEAD si existe"
-append_file_head "src/stohymolap/__init__.py" 120 "src/stohymolap/__init__.py"
-append_file_head "src/stohymolap/validation_checks.py" 260 "src/stohymolap/validation_checks.py"
-append_file_head "scripts/run_experiment.py" 180 "scripts/run_experiment.py"
-append_file_head "scripts/run_all_experiments.py" 180 "scripts/run_all_experiments.py"
-append_file_head "scripts/summarize_results.py" 180 "scripts/summarize_results.py"
-append_file_head "outputs/comparison/physical_audit_status.txt" 60 "physical_audit_status"
-append_file_head "outputs/comparison/physical_audit_report.md" 220 "physical_audit_report.md"
-append_file_head "outputs/comparison/physical_audit_issues.csv" 120 "physical_audit_issues.csv"
-append_file_head "outputs/comparison/metrics_summary.csv" 120 "metrics_summary.csv si existe"
-append_file_head "outputs/comparison/experiment_comparison.csv" 120 "experiment_comparison.csv si existe"
-
-run_cmd "Resumen de outputs E1/E2" bash -lc \
-  'for e in E1_RAMIS_DET_BF E2_RAMIS_LEVY_BF; do
-      d="outputs/experiments/$e"
-      echo "### $e"
-      if [[ -d "$d" ]]; then
-        find "$d" -maxdepth 1 -type f | sort | sed "s#^#- #"
-        for f in best_parameters.csv top_k_parameters.csv metrics_train.csv metrics_validation.csv metrics_by_regime.csv config_used.yaml; do
-          if [[ -f "$d/$f" ]]; then
-            echo
-            echo "--- $d/$f"
-            sed -n "1,40p" "$d/$f"
-          fi
-        done
-      else
-        echo "No existe $d"
-      fi
-      echo
-    done'
-
-if [[ "$WITH_TESTS" -eq 1 ]]; then
-  run_cmd "pytest completo" bash -lc 'PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q'
-else
-  {
-    echo
-    echo "## Tests"
-    echo
-    echo "No se ejecutaron tests. Para incluirlos:"
-    echo
-    echo "\`\`\`bash"
-    echo "bash generar_contexto.sh --with-tests"
-    echo "\`\`\`"
-  } >> "$CONTEXT_MD"
-fi
-
-if [[ "$WITH_AUDIT" -eq 1 ]]; then
-  run_cmd "Auditoría física Fase 2.6 E1/E2" bash -lc \
-    'python scripts/audit_physical_phase26.py --config configs/experiments.yaml --experiments E1_RAMIS_DET_BF E2_RAMIS_LEVY_BF --run'
-else
-  {
-    echo
-    echo "## Auditoría física"
-    echo
-    echo "No se re-ejecutó auditoría. Para incluirla:"
-    echo
-    echo "\`\`\`bash"
-    echo "bash generar_contexto.sh --with-audit"
-    echo "\`\`\`"
-  } >> "$CONTEXT_MD"
-fi
-
-cat > "$PROMPT_MD" <<'EOF'
-# Prompt para siguiente chat — StoHyMoLAP Fase 3
-
-Continuemos con StoHyMoLAP desde Fase 3.
-
-Fase 0/1 y Fase 2 ya están cerradas. Fase 2 cerró con auditoría física `WARN` justificable por PBIAS >100% solo en régimen bajo de E1; las métricas globales de validación son aceptables. La implementación física RAMIS/baseflow quedó corregida:
-- `Qobs` no se rellena silenciosamente con `Qsim`.
-- `baseflow` se escala con `alpha_area`.
-- E1 determinístico calibra sin ruido Lévy.
-- La validación no reinicia con `Qobs` observado; se simula train+validation de forma continua.
-- `Q0 = Qfast0 + Qbase0`, sin duplicar caudal inicial.
-- Los parámetros RAMIS tienen validación de estabilidad.
-- La calibración selecciona la mejor fila por `J` multiobjetivo (`parameter_selection: best_j`).
-- Se generan componentes físicos `Qfast`, `Qbase`, `Qtotal` y auditoría reproducible.
-
-Necesito implementar la Fase 3: matriz experimental de ablaciones publicable, comparando RAMIS determinístico, RAMIS+Lévy, baseflow/memoria hidrológica y componentes híbridos/ML sin crear repositorios separados.
-
-Objetivos de Fase 3:
-1. Definir matriz experimental clara y defendible.
-2. Revisar/ajustar `configs/experiments.yaml` para experimentos de ablación.
-3. Garantizar que cada experimento tenga outputs comparables.
-4. Generar tablas de comparación global y por régimen.
-5. Preparar figuras para paper: hidrogramas, FDC, dispersión Qobs-Qsim, residuos por régimen, incertidumbre/ensemble si aplica.
-6. Evitar fuga de información entre train y validation.
-7. Mantener reproducibilidad por seed, config_used, git commit y auditoría.
-8. Dejar scripts de corrida y validación para todos los experimentos.
-
-Primero revisa el contexto adjunto y dime:
-- Si Fase 3 puede empezar sin modificar más la física.
-- Qué experimentos mínimos y extendidos deben formar la matriz.
-- Qué archivos conviene modificar primero.
-- Qué criterios de aceptación debe tener Fase 3.
-Después genera los parches necesarios por subfase.
-EOF
-
-# Copia de archivos clave al paquete.
-mkdir -p "${WORK_DIR}/repo"
-
+# 1) Copia de código/configuración esencial
 for f in \
-  "pyproject.toml" \
-  "requirements.txt" \
-  ".gitignore" \
-  "README.md" \
-  "generar_contexto.sh" \
-  "configs/base.yaml" \
-  "configs/experiments.yaml" \
-  "configs/model_bounds.yaml" \
-  "scripts/run_experiment.py" \
-  "scripts/run_all_experiments.py" \
-  "scripts/summarize_results.py" \
-  "scripts/audit_physical_phase26.py" \
-  "src/stohymolap/__init__.py" \
-  "src/stohymolap/validation_checks.py" \
-  "tests/test_smoke.py"
+  README.md \
+  LICENSE \
+  pyproject.toml \
+  setup.py \
+  setup.cfg \
+  requirements.txt \
+  requirements-dev.txt \
+  environment.yml \
+  environment.yaml \
+  pytest.ini \
+  tox.ini \
+  Makefile \
+  .gitignore
 do
-  if [[ -f "$f" ]]; then
-    mkdir -p "${WORK_DIR}/repo/$(dirname "$f")"
-    cp "$f" "${WORK_DIR}/repo/$f"
-    echo "$f" >> "$MANIFEST"
-  fi
+  copy_file "$f"
 done
 
-# Copia módulos Python ubicados directamente en src/stohymolap/.
-# Esto evita perder archivos como validation_checks.py o __init__.py al generar contexto.
-if [[ -d "src/stohymolap" ]]; then
-  mkdir -p "${WORK_DIR}/repo/src/stohymolap"
-  find "src/stohymolap" -maxdepth 1 -type f -name "*.py" -print0 | while IFS= read -r -d '' f; do
-    cp "$f" "${WORK_DIR}/repo/src/stohymolap/"
-    echo "$f" >> "$MANIFEST"
+copy_dir "configs"
+copy_dir "src/stohymolap"
+copy_dir "scripts"
+copy_dir "tests"
+
+# Docs: se copian, pero se excluyen caches por copy_dir.
+copy_dir "docs"
+
+# 2) Datos: solo cabeceras/muestras para evitar paquetes pesados.
+if [[ "$WITH_DATA_HEAD" -eq 1 && -d "data" ]]; then
+  mkdir -p "${FILES_ROOT}/data_samples"
+  find data -maxdepth 2 -type f \( -name "*.csv" -o -name "*.txt" -o -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) | sort | while read -r f; do
+    rel="${f#data/}"
+    sample="${FILES_ROOT}/data_samples/${rel}.head.txt"
+    mkdir -p "$(dirname "$sample")"
+    {
+      echo "# Sample of ${f}"
+      echo "# Generated by generar_contexto.sh"
+      echo
+      sed -n '1,80p' "$f"
+    } > "$sample" 2>/dev/null || true
   done
 fi
 
-for d in \
-  "src/stohymolap/data" \
-  "src/stohymolap/hydro" \
-  "src/stohymolap/stochastic" \
-  "src/stohymolap/calibration" \
-  "src/stohymolap/experiments" \
-  "src/stohymolap/metrics" \
-  "src/stohymolap/diagnostics" \
-  "src/stohymolap/features" \
-  "src/stohymolap/ml" \
-  "src/stohymolap/plotting" \
-  "src/stohymolap/utils"
-do
-  if [[ -d "$d" ]]; then
-    mkdir -p "${WORK_DIR}/repo/$(dirname "$d")"
-    rsync -a \
-      --exclude="__pycache__" \
-      --exclude="*.pyc" \
-      "$d" "${WORK_DIR}/repo/$(dirname "$d")/"
-    echo "$d" >> "$MANIFEST"
-  fi
-done
+# 3) Outputs comparativos y resúmenes por experimento.
+if [[ "$WITH_OUTPUTS" -eq 1 ]]; then
+  copy_dir "outputs/comparison"
 
-# Datos de ejemplo: solo HEAD para evitar paquetes pesados.
-if [[ -f "data/ramis_hydro.csv" ]]; then
-  mkdir -p "${WORK_DIR}/repo/data"
-  head -n 300 "data/ramis_hydro.csv" > "${WORK_DIR}/repo/data/ramis_hydro_HEAD.csv"
-  echo "data/ramis_hydro.csv -> HEAD" >> "$MANIFEST"
-fi
+  if [[ -d "outputs/experiments" ]]; then
+    mkdir -p "${FILES_ROOT}/outputs/experiments"
+    find outputs/experiments -mindepth 1 -maxdepth 1 -type d | sort | while read -r expdir; do
+      expname="$(basename "$expdir")"
+      dst="${FILES_ROOT}/outputs/experiments/${expname}"
+      mkdir -p "$dst"
 
-# Diagramas/documentación liviana, si existe.
-if [[ -d "docs/diagrams" ]]; then
-  mkdir -p "${WORK_DIR}/repo/docs"
-  rsync -a --exclude="__pycache__" --exclude="*.pyc" "docs/diagrams" "${WORK_DIR}/repo/docs/"
-  echo "docs/diagrams" >> "$MANIFEST"
-fi
+      for f in \
+        config_used.yaml \
+        run_metadata.json \
+        evaluation_window.json \
+        train_metrics.csv \
+        validation_metrics.csv \
+        validation_metrics_common_intersection.csv \
+        regime_metrics_train.csv \
+        regime_metrics_validation.csv \
+        uncertainty_metrics.csv \
+        best_parameters.csv \
+        top_k_parameters.csv \
+        postprocessing_report.json \
+        physical_uncertainty_reference.csv
+      do
+        [[ -f "${expdir}/${f}" ]] && cp -a "${expdir}/${f}" "${dst}/${f}"
+      done
 
-# Reportes y CSV pequeños de auditoría/comparación.
-mkdir -p "${WORK_DIR}/repo/outputs/comparison"
-for f in \
-  "outputs/comparison/physical_audit_status.txt" \
-  "outputs/comparison/physical_audit_report.md" \
-  "outputs/comparison/physical_audit_issues.csv" \
-  "outputs/comparison/physical_audit_summary.csv" \
-  "outputs/comparison/metrics_summary.csv" \
-  "outputs/comparison/experiment_comparison.csv" \
-  "outputs/comparison/run_all.log" \
-  "outputs/comparison/phase26_audit.log"
-do
-  copy_selected_csv "$f" "${WORK_DIR}/repo/outputs/comparison"
-done
-
-# Parámetros y métricas por experimento. Evita series pesadas.
-for e in E1_RAMIS_DET_BF E2_RAMIS_LEVY_BF; do
-  srcd="outputs/experiments/${e}"
-  dstd="${WORK_DIR}/repo/outputs/experiments/${e}"
-  if [[ -d "$srcd" ]]; then
-    mkdir -p "$dstd"
-    for f in \
-      "best_parameters.csv" \
-      "top_k_parameters.csv" \
-      "metrics_train.csv" \
-      "metrics_validation.csv" \
-      "metrics_by_regime.csv" \
-      "config_used.yaml" \
-      "run.log"
-    do
-      copy_selected_csv "${srcd}/${f}" "$dstd"
-    done
-
-    # Solo primeras filas de series pesadas para contexto.
-    for f in \
-      "predictions_train.csv" \
-      "predictions_validation.csv" \
-      "physical_components_train.csv" \
-      "physical_components_validation.csv"
-    do
-      if [[ -f "${srcd}/${f}" ]]; then
-        head -n 80 "${srcd}/${f}" > "${dstd}/${f%.csv}_HEAD.csv"
-        echo "${srcd}/${f} -> HEAD" >> "$MANIFEST"
-      fi
+      # Muestras de predicciones, no archivos completos.
+      for pred in predictions_train.csv predictions_validation.csv calibration_series.csv validation_series.csv; do
+        if [[ -f "${expdir}/${pred}" ]]; then
+          {
+            echo "# Sample: ${expdir}/${pred}"
+            echo "# First 40 lines"
+            sed -n '1,40p' "${expdir}/${pred}"
+            echo
+            echo "# Last 20 lines"
+            tail -n 20 "${expdir}/${pred}"
+          } > "${dst}/${pred}.sample.txt" 2>/dev/null || true
+        fi
+      done
     done
   fi
-done
+fi
 
-# Agrega manifest final.
+# 4) Diagnóstico Git y entorno.
+mkdir -p "${CONTEXT_ROOT}/diagnostics"
+
+run_capture "${CONTEXT_ROOT}/diagnostics/git_status_short.txt" git status --short
+run_capture "${CONTEXT_ROOT}/diagnostics/git_log_recent.txt" git log --oneline --decorate -n 20
+run_capture "${CONTEXT_ROOT}/diagnostics/git_branch.txt" git branch --show-current
+run_capture "${CONTEXT_ROOT}/diagnostics/git_rev_parse_head.txt" git rev-parse HEAD
+run_capture "${CONTEXT_ROOT}/diagnostics/git_diff_stat.txt" git diff --stat
+run_capture "${CONTEXT_ROOT}/diagnostics/git_staged_diff_stat.txt" git diff --cached --stat
+run_capture "${CONTEXT_ROOT}/diagnostics/git_tracked_pycache.txt" bash -lc "git ls-files | grep -E '(__pycache__|\\.py[co]$)' || true"
+
+if [[ "$WITH_FULL_DIFF" -eq 1 ]]; then
+  run_capture "${CONTEXT_ROOT}/diagnostics/git_diff_full_no_cache.txt" bash -lc "git diff -- . ':(exclude)*__pycache__*' ':(exclude)*.pyc'"
+fi
+
+if [[ "$WITH_ENV" -eq 1 ]]; then
+  run_capture "${CONTEXT_ROOT}/diagnostics/python_version.txt" python --version
+  run_capture "${CONTEXT_ROOT}/diagnostics/python_key_versions.txt" python - <<'PY'
+mods = ["numpy", "pandas", "scipy", "sklearn", "matplotlib", "yaml", "joblib"]
+for m in mods:
+    try:
+        mod = __import__(m)
+        print(f"{m}: {getattr(mod, '__version__', 'unknown')}")
+    except Exception as exc:
+        print(f"{m}: NOT_AVAILABLE ({exc})")
+try:
+    import torch
+    print(f"torch: {torch.__version__}")
+except Exception as exc:
+    print(f"torch: NOT_AVAILABLE ({exc})")
+try:
+    import tensorflow as tf
+    print(f"tensorflow: {tf.__version__}")
+except Exception as exc:
+    print(f"tensorflow: NOT_AVAILABLE ({exc})")
+try:
+    import xgboost
+    print(f"xgboost: {xgboost.__version__}")
+except Exception as exc:
+    print(f"xgboost: NOT_AVAILABLE ({exc})")
+PY
+fi
+
+run_capture "${CONTEXT_ROOT}/diagnostics/experiment_list.txt" python scripts/run_experiment.py --config configs/experiments.yaml --list
+
+if [[ "$WITH_TESTS" -eq 1 ]]; then
+  if command -v pytest >/dev/null 2>&1; then
+    run_capture "${CONTEXT_ROOT}/diagnostics/pytest_q.txt" pytest -q
+  else
+    write_text_file "${CONTEXT_ROOT}/diagnostics/pytest_q.txt" <<'EOF'
+pytest no está disponible como comando en este entorno.
+Instala pytest o ejecuta con el intérprete correcto.
+EOF
+  fi
+else
+  write_text_file "${CONTEXT_ROOT}/diagnostics/pytest_q.txt" <<'EOF'
+No se ejecutó pytest. Para incluirlo:
+  bash generar_contexto.sh --with-tests
+EOF
+fi
+
+# 5) Reporte principal.
+cat > "$REPORT_MD" <<'EOF'
+# Contexto StoHyMoLAP — Fase 3.4
+
+## Estado resumido
+
+Proyecto: StoHyMoLAP  
+Fase actual: transición desde Fase 3.3A hacia Fase 3.4.
+
+### Fases cerradas
+
+- Fase 3.0A: saneamiento del paquete, imports y scripts base.
+- Fase 3.1: matriz experimental canónica E0–E8.
+- Fase 3.2: ventana común de evaluación.
+- Fase 3.3A: postproceso auditable Qsim >= 0 para ML/híbridos y leaderboard por intersección común.
+
+### Matriz canónica
+
+- E0_RAMIS_DET_NOBF
+- E1_RAMIS_DET_BF
+- E2_RAMIS_LEVY_NOBF
+- E3_RAMIS_LEVY_BF
+- E4_ML_PURE_XGB
+- E5_HYB_XGB_MEAN
+- E6_HYB_XGB_QUANTILES
+- E7_HYB_GRU_MEAN
+- E8_HYB_GRU_QUANTILES
+
+### Puntos críticos para revisar en Fase 3.4
+
+1. Auditoría de leakage entre train/validation.
+2. Figuras para paper: hidrogramas, FDC, dispersión Qobs-Qsim, residuos por régimen, bandas físicas.
+3. Tablas finales: leaderboard común, métricas por régimen, efectos de ablación.
+4. Incertidumbre: E2/E3 tienen PICP bajo; no presentar bandas como incertidumbre calibrada sin ajustar.
+5. E7/E8 pueden estar usando fallback MLP si no existe TensorFlow/PyTorch. No llamarlos “GRU real” sin confirmar backend.
+6. Revisar si el repo aún tiene `__pycache__` o `.pyc` versionados.
+7. Evitar incluir `../texto/` u otros directorios externos accidentales.
+
+EOF
+
+append_file_section "${CONTEXT_ROOT}/diagnostics/git_status_short.txt" "Git status corto"
+append_file_section "${CONTEXT_ROOT}/diagnostics/git_log_recent.txt" "Commits recientes"
+append_file_section "${CONTEXT_ROOT}/diagnostics/git_tracked_pycache.txt" "Archivos cache versionados detectados"
+append_file_section "${CONTEXT_ROOT}/diagnostics/experiment_list.txt" "Lista de experimentos"
+
+if [[ -f "outputs/comparison/leaderboard_common_intersection.csv" ]]; then
+  append_file_section "outputs/comparison/leaderboard_common_intersection.csv" "Leaderboard común por intersección exacta"
+fi
+if [[ -f "outputs/comparison/leaderboard.csv" ]]; then
+  append_file_section "outputs/comparison/leaderboard.csv" "Leaderboard general"
+fi
+if [[ -f "outputs/comparison/evaluation_window_comparison.csv" ]]; then
+  append_file_section "outputs/comparison/evaluation_window_comparison.csv" "Comparación de ventana de evaluación"
+fi
+if [[ -f "outputs/comparison/ablation_effects_common_intersection.csv" ]]; then
+  append_file_section "outputs/comparison/ablation_effects_common_intersection.csv" "Efectos de ablación en intersección común"
+fi
+if [[ -f "${CONTEXT_ROOT}/diagnostics/pytest_q.txt" ]]; then
+  append_file_section "${CONTEXT_ROOT}/diagnostics/pytest_q.txt" "Resultado de pytest"
+fi
+
+cat >> "$REPORT_MD" <<'EOF'
+
+## Archivos incluidos
+
+Ver `manifest.txt`.
+
+## Uso en el siguiente chat
+
+Adjuntar el `.tar.gz` generado y pegar el contenido de `prompt_siguiente_chat_fase3_4.md`.
+
+EOF
+
+# 6) Prompt para el siguiente chat.
+cat > "$PROMPT_MD" <<'EOF'
+# Prompt para siguiente chat — StoHyMoLAP Fase 3.4
+
+Continuemos con StoHyMoLAP desde Fase 3.4.
+
+## Estado actual
+
+Ya se avanzó la Fase 3 de la matriz experimental de ablaciones:
+
+- Fase 3.0A cerrada: paquete saneado, imports recuperados, scripts base restaurados.
+- Fase 3.1 cerrada: matriz canónica E0–E8 definida.
+- Fase 3.2 cerrada: ventana común de evaluación implementada.
+- Fase 3.3A cerrada funcionalmente: E0–E8 corren y existe leaderboard común por intersección exacta.
+
+Matriz canónica:
+
+1. `E0_RAMIS_DET_NOBF`
+2. `E1_RAMIS_DET_BF`
+3. `E2_RAMIS_LEVY_NOBF`
+4. `E3_RAMIS_LEVY_BF`
+5. `E4_ML_PURE_XGB`
+6. `E5_HYB_XGB_MEAN`
+7. `E6_HYB_XGB_QUANTILES`
+8. `E7_HYB_GRU_MEAN`
+9. `E8_HYB_GRU_QUANTILES`
+
+## Resultados principales actuales
+
+El leaderboard común por intersección exacta tiene como mejor modelo:
+
+- `E8_HYB_GRU_QUANTILES`: NSE ≈ 0.8491, KGE ≈ 0.8986.
+- `E6_HYB_XGB_QUANTILES`: NSE ≈ 0.7399, KGE ≈ 0.8098.
+- `E7_HYB_GRU_MEAN`: NSE ≈ 0.6865, KGE ≈ 0.7891.
+- `E5_HYB_XGB_MEAN`: NSE ≈ 0.6262, KGE ≈ 0.7146.
+- `E4_ML_PURE_XGB`: NSE ≈ 0.5752, KGE ≈ 0.6609.
+- Los físicos E0–E3 quedan por debajo en NSE, pero E3 tiene KGE competitivo y conserva valor físico/estocástico.
+
+## Advertencias metodológicas
+
+1. `E7` y `E8` pueden NO ser GRU real si el entorno no tiene TensorFlow/PyTorch. El log indicó fallback MLP sobre secuencias aplanadas. Revisar backend antes de redactar el paper.
+2. En Fase 3.3A se implementó postproceso auditable `Qsim = max(Qsim_raw, 0)` solo para ML/híbridos. Revisar `postprocessing_report.json`, especialmente en E8.
+3. La incertidumbre física E2/E3 tiene PICP bajo; tratarla como referencia estocástica no calibrada, salvo que se implemente calibración/ensanchar bandas.
+4. Revisar si aún hay `__pycache__`/`.pyc` versionados y limpiar Git antes de nuevos commits.
+5. No incluir carpetas externas accidentales como `../texto/`.
+
+## Objetivo de Fase 3.4
+
+Preparar la salida publicable:
+
+1. Auditoría de leakage:
+   - confirmar que train/validation están separados temporalmente;
+   - confirmar que lags/ventanas no usan información futura;
+   - confirmar que umbrales de régimen se calculan solo con train;
+   - confirmar que la ventana común se aplica consistentemente.
+2. Figuras:
+   - hidrograma validation para E0/E1/E3/E4/E6/E8;
+   - FDC Qobs-Qsim;
+   - scatter Qobs-Qsim;
+   - residuos por régimen;
+   - comparación de componentes Qfast/Qbase/Qtotal;
+   - bandas físicas E3/E2 como referencia, con advertencia de subdispersión.
+3. Tablas:
+   - leaderboard común;
+   - métricas por régimen;
+   - efectos de ablación;
+   - resumen de postproceso ML;
+   - estado de backend para E7/E8.
+4. README/resultados:
+   - actualizar narrativa de Fase 3;
+   - distinguir “híbrido secuencial fallback MLP” vs “GRU real”;
+   - listar limitaciones.
+5. Generar parches por subfase:
+   - 3.4A auditoría de leakage y QA;
+   - 3.4B figuras;
+   - 3.4C tablas paper-ready;
+   - 3.4D reporte final.
+
+Primero revisa el contexto adjunto y dime:
+- si hay que limpiar Git antes de seguir;
+- si E7/E8 deben renombrarse o solo documentar backend;
+- qué outputs ya están listos para paper;
+- qué parches conviene aplicar en 3.4A.
+Después genera el parche 3.4A.
+EOF
+
+# 7) Manifest y paquete.
 {
-  echo "# Manifest"
+  echo "# Manifest — ${CONTEXT_BASENAME}"
+  echo "# Generado: $(date -Iseconds)"
   echo
-  sort -u "$MANIFEST" 2>/dev/null || true
-} > "${WORK_DIR}/manifest.md"
+  find "$CONTEXT_ROOT" -type f | sort
+} > "$MANIFEST_TXT"
 
-tar -czf "$ARCHIVE" -C "$OUT_DIR" "$(basename "$WORK_DIR")"
+tar -czf "$PKG_FILE" -C "contextos" "$CONTEXT_BASENAME"
 
 echo
 echo "Contexto generado:"
-echo "  ${CONTEXT_MD}"
+echo "  ${REPORT_MD}"
+echo
 echo "Prompt siguiente chat:"
 echo "  ${PROMPT_MD}"
+echo
 echo "Paquete tar.gz:"
-echo "  ${ARCHIVE}"
+echo "  ${PKG_FILE}"
 echo
 echo "Adjunta en el siguiente chat el .tar.gz y pega el contenido de:"
 echo "  ${PROMPT_MD}"
 echo
+echo "Sugerencia antes de cambiar de chat:"
+echo "  1) Revisa ${CONTEXT_ROOT}/diagnostics/git_tracked_pycache.txt"
+echo "  2) Si aparecen .pyc versionados, límpialos antes de seguir."
