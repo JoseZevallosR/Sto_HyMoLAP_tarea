@@ -1,0 +1,25 @@
+%% Arquitectura general de la plataforma StoHyMoLAP / RAMIS
+flowchart TD
+    CFG["configs/*.yaml<br/>(global, pet, calibration,<br/>stochastic, baseflow, experiments)"] --> RUN["scripts/run_experiment.py<br/>scripts/run_all_experiments.py"]
+    RUN --> REG["experiments.registry"]
+    REG --> ER["ExperimentRunner"]
+
+    subgraph CORE["src/stohymolap"]
+        DATA["data: io + preprocessing"]
+        HYDRO["hydro: pet, ramis, baseflow, water_balance"]
+        STO["stochastic: levy + monte_carlo"]
+        CAL["calibration: objective + monte_carlo_search"]
+        FEAT["features: lagged, uncertainty, builder"]
+        ML["ml: xgboost / gru / pure_ml"]
+        MET["metrics: deterministic, uncertainty, regime"]
+        PLOT["plotting: hydrographs, scatter, fdc, taylor"]
+        VAL["validation_checks (anti-leakage)"]
+    end
+
+    ER --> DATA --> HYDRO --> STO --> CAL
+    CAL --> FEAT --> ML --> MET --> PLOT
+    VAL -.controla.-> ER
+
+    ER --> OUT["outputs/experiments/E*/<br/>(metrics, predictions, figuras, modelo)"]
+    OUT --> CMP["experiments.comparison"]
+    CMP --> COMP["outputs/comparison/<br/>leaderboard + tablas + figuras"]

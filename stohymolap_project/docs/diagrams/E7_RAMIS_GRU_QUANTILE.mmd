@@ -1,0 +1,8 @@
+%% E7: Hibrido secuencial RAMIS-Levy -> GRU con cuantiles
+flowchart LR
+    RAMIS["RAMIS-Levy + flujo base"] --> SUMM["Qmean, q05..q95,<br/>anchos, Qbase"]
+    SUMM --> SEQ["Secuencias de longitud 7"]
+    SEQ --> SCALER["MinMax (fit solo en train)"]
+    SCALER --> GRU["GRU / MLP secuencial (fallback)"]
+    GRU --> QHAT["Q corregido (t+1)"]
+    QHAT --> EVAL["Metricas det. + incertidumbre"]
