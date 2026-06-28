@@ -151,3 +151,32 @@ def test_water_balance_without_baseflow_keeps_qfast():
 
     assert np.allclose(q_total, q_fast)
     assert np.allclose(q_base, 0.0)
+
+def test_deterministic_calibration_forces_sigma_zero():
+    from stohymolap.calibration.monte_carlo_search import calibrate
+
+    rng = np.random.default_rng(123)
+    n = 80
+    peff = np.clip(rng.gamma(1.2, 2.0, n) * (rng.random(n) < 0.35), 0, None)
+    discharge = np.clip(0.2 + np.convolve(peff, [0.18, 0.08, 0.03], mode="same"), 0, None)
+    bounds = {
+        "mu": (0.75, 0.95),
+        "lambda": (2.0, 3.4),
+        "sigma": (0.05, 0.10),  # debe ignorarse en modo deterministico
+        "alpha": (1.1, 1.9),
+        "beta": (-1.0, 0.0),
+        "c_r": (0.0, 0.0),
+        "k_b": (0.05, 0.05),
+        "S0_b": (0.0, 0.0),
+    }
+
+    result = calibrate(
+        discharge, peff, bounds=bounds,
+        n_traj=4, n_param_samples=8, top_frac=0.5, seed=7,
+        use_baseflow=False, use_stochastic=False,
+    )
+
+    assert result.best_params["sigma"] == 0.0
+    assert np.allclose(result.top_k_table[:, 2], 0.0)
+    assert result.diagnostics["use_stochastic"] is False
+

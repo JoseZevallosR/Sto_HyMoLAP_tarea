@@ -147,6 +147,7 @@ class ExperimentRunner:
             seed=self.ec.seed,
             use_baseflow=self.ec.use_baseflow,
             calibrate_baseflow=bool(self.ec.baseflow.get("calibrate", False)),
+            use_stochastic=self.ec.use_stochastic,
             objective_weights=weights,
         )
         self.cal_result = result

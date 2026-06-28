@@ -6,7 +6,10 @@ extensiones:
 1. Reservorio de baseflow opcional y calibrable (c_r, k_b, S0_b): cada
    trayectoria sortea sus parametros de baseflow y el caudal total
    (Qfast + Qbase) es el que se evalua contra Qobs.
-2. Seleccion de parametros finales por objetivo multiobjetivo: el top-K de
+2. Consistencia det/estocastica: si el experimento no activa Levy, la
+   calibracion fuerza sigma=0 y usa incrementos Levy nulos. Asi E1 calibra
+   exactamente el mismo modelo deterministico que luego se valida.
+3. Seleccion de parametros finales por objetivo multiobjetivo: el top-K de
    trayectorias se elige por el menor ``J`` (no por NSE puro), de modo que la
    eleccion respete tambien KGE, PBIAS y, cuando aplica, la cobertura.
 
@@ -66,6 +69,7 @@ def calibrate(
     seed: int,
     use_baseflow: bool = False,
     calibrate_baseflow: bool = False,
+    use_stochastic: bool = True,
     objective_weights: Optional[Dict[str, float]] = None,
     clamp_negative_q: bool = True,
 ) -> CalibrationResult:
@@ -73,6 +77,11 @@ def calibrate(
 
     ``bounds`` debe contener: mu, lambda, sigma, alpha, beta y (si aplica)
     c_r, k_b, S0_b, cada uno como tupla (min, max).
+
+    Si ``use_stochastic=False``, la busqueda ignora ``sigma_bounds`` y los
+    parametros Levy: ``sigma`` se fija en 0 y la serie Levy se fija en cero.
+    Esto evita calibrar un modelo ruidoso y evaluar luego un modelo
+    deterministico distinto.
     """
     discharge = np.asarray(discharge, dtype=float)
     peff = np.asarray(peff, dtype=float)
@@ -96,18 +105,34 @@ def calibrate(
     }
     qq_best = np.zeros((n, T), dtype=float)
 
-    _log.info("Calibracion MC: %d trayectorias x %d candidatos | baseflow=%s",
-              T, n_param_samples, use_baseflow)
+    _log.info(
+        "Calibracion MC: %d trayectorias x %d candidatos | stochastic=%s | baseflow=%s",
+        T, n_param_samples, use_stochastic, use_baseflow,
+    )
 
     for traj in range(T):
-        alpha_traj = rng.uniform(*bounds["alpha"])
-        beta_traj = rng.uniform(*bounds["beta"])
-        lev = stable_rvs_cms(alpha=alpha_traj, beta=beta_traj, loc=0.0,
-                             scale=1.0, size=n, rng=rng)
+        if use_stochastic:
+            alpha_traj = rng.uniform(*bounds["alpha"])
+            beta_traj = rng.uniform(*bounds["beta"])
+            lev = stable_rvs_cms(
+                alpha=alpha_traj, beta=beta_traj, loc=0.0,
+                scale=1.0, size=n, rng=rng,
+            )
+        else:
+            # Caso deterministico puro: el experimento no usa Levy.
+            # Guardamos alpha/beta convencionales solo para mantener el mismo
+            # esquema de salida en best_parameters/top_k.
+            alpha_traj = 2.0
+            beta_traj = 0.0
+            lev = np.zeros(n, dtype=float)
 
         mu_c = rng.uniform(*bounds["mu"], size=n_param_samples)
         lam_c = rng.uniform(*bounds["lambda"], size=n_param_samples)
-        sig_c = rng.uniform(*bounds["sigma"], size=n_param_samples)
+        sig_c = (
+            rng.uniform(*bounds["sigma"], size=n_param_samples)
+            if use_stochastic
+            else np.zeros(n_param_samples, dtype=float)
+        )
 
         q_fast = simulate_fast_candidates(
             mu=mu_c, lambda_=lam_c, sigma=sig_c, peff=peff, q0=q0,
@@ -205,5 +230,5 @@ def calibrate(
         sup_trajectory=sup_traj,
         alpha_area=alpha_area,
         metrics=metrics,
-        diagnostics={"store": store, "top_idx": top_idx},
+        diagnostics={"store": store, "top_idx": top_idx, "use_stochastic": use_stochastic},
     )
