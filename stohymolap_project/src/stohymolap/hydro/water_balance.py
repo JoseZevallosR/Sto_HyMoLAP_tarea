@@ -22,6 +22,7 @@ def assemble_total_discharge(
     use_baseflow: bool,
     baseflow_params: Optional[BaseflowParams] = None,
     q0_obs: Optional[float] = None,
+    alpha_area: float = 1.0,
     clamp_negative: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Devuelve (Q_total, Q_base).
@@ -33,7 +34,8 @@ def assemble_total_discharge(
     if use_baseflow:
         params = baseflow_params or BaseflowParams()
         q_total, q_base = add_baseflow(
-            q_fast, peff, params, q0_obs=q0_obs, clamp_negative=clamp_negative
+            q_fast, peff, params, q0_obs=q0_obs, alpha_area=alpha_area,
+            clamp_negative=clamp_negative
         )
         return q_total, q_base
 

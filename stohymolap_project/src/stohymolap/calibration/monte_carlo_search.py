@@ -126,7 +126,8 @@ def calibrate(
                 bf = BaseflowParams()
             # add_baseflow espera (n,) o (n, n_traj); transponemos a (n, cand).
             q_total_T, q_base = add_baseflow(
-                q_fast.T, peff, bf, q0_obs=q0, clamp_negative=clamp_negative_q
+                q_fast.T, peff, bf, q0_obs=q0, alpha_area=alpha_area,
+                clamp_negative=clamp_negative_q
             )
             q_total = q_total_T.T  # (n_param_samples, n)
         else:

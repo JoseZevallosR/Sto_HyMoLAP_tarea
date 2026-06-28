@@ -194,6 +194,7 @@ class ExperimentRunner:
         q_total, q_base = assemble_total_discharge(
             q_fast, peff, use_baseflow=self.ec.use_baseflow,
             baseflow_params=self.baseflow_params, q0_obs=q0,
+            alpha_area=self.cal_result.alpha_area,
         )
         summary = {"Qmean": q_total, "Qbase": q_base, "Qfast": q_fast}
         return _SimBundle(q_total=q_total, q_base=q_base, summary=summary)

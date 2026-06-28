@@ -127,3 +127,27 @@ def test_e1_runs_end_to_end(tmp_path):
     used = (out_dir / "config_used.yaml").read_text(encoding="utf-8")
     assert "runtime:" in used
     assert "git_commit:" in used
+
+
+def test_baseflow_uses_same_alpha_area_scale_as_ramis():
+    from stohymolap.hydro.baseflow import BaseflowParams, linear_reservoir
+
+    peff = np.array([0.0, 10.0, 0.0, 0.0], dtype=float)
+    params = BaseflowParams(c_r=1.0, k_b=0.5, S0_b=0.0)
+    q_base_1, _ = linear_reservoir(peff, params, alpha_area=1.0)
+    q_base_2, _ = linear_reservoir(peff, params, alpha_area=2.0)
+
+    assert np.allclose(q_base_2, 2.0 * q_base_1)
+
+
+def test_water_balance_without_baseflow_keeps_qfast():
+    from stohymolap.hydro.water_balance import assemble_total_discharge
+
+    q_fast = np.array([1.0, 2.0, 3.0])
+    peff = np.array([10.0, 0.0, 0.0])
+    q_total, q_base = assemble_total_discharge(
+        q_fast, peff, use_baseflow=False, alpha_area=999.0
+    )
+
+    assert np.allclose(q_total, q_fast)
+    assert np.allclose(q_base, 0.0)

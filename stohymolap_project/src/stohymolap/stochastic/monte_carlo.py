@@ -102,7 +102,7 @@ def run_monte_carlo(
         q_total, q_base = assemble_total_discharge(
             q_fast, peff,
             use_baseflow=use_baseflow, baseflow_params=baseflow_params,
-            q0_obs=q0_obs, clamp_negative=clamp_negative_q,
+            q0_obs=q0_obs, alpha_area=alpha_area, clamp_negative=clamp_negative_q,
         )
         ensemble[:, written:written + current] = q_total
         written += current

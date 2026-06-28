@@ -7,9 +7,9 @@ ablaciones A1/A2 y se usa en E1, E2, E4-E7.
 Ecuaciones (paso diario):
 
     Ep_t     = max(P_t - PET_t, 0)        # precipitacion efectiva
-    R_t      = c_r * Ep_t                  # recarga al reservorio
+    R_t      = c_r * alpha_area * Ep_t     # recarga en unidades equivalentes a Q
     S_b[t+1] = max(0, S_b[t] + R_t - k_b * S_b[t])
-    Q_b[t]   = k_b * S_b[t]                # caudal base
+    Q_b[t]   = k_b * S_b[t]                # caudal base en unidades de Q
     Q_total  = max(Q_fast + Q_b, 0)        # caudal total
 
 Parametros:
@@ -51,6 +51,7 @@ def linear_reservoir(
     peff: np.ndarray,
     params: BaseflowParams,
     q0_obs: Optional[float] = None,
+    alpha_area: float = 1.0,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Simula el reservorio lineal y devuelve (Q_base, S_storage).
 
@@ -62,6 +63,9 @@ def linear_reservoir(
         Parametros del reservorio.
     q0_obs:
         Caudal observado inicial, usado para inicializar S0_b si no se entrega.
+    alpha_area:
+        Factor empirico que lleva Peff (mm/dia) a las unidades de caudal usadas
+        por Qfast/Qobs. Debe ser el mismo factor usado por RAMIS.
 
     Returns
     -------
@@ -70,6 +74,9 @@ def linear_reservoir(
     """
     p = params.clipped()
     peff = np.asarray(peff, dtype=float)
+    alpha_area = float(alpha_area)
+    if not np.isfinite(alpha_area) or alpha_area <= 0:
+        raise ValueError("alpha_area debe ser finito y positivo para el reservorio baseflow.")
     n = len(peff)
 
     if p.S0_b is not None:
@@ -87,7 +94,7 @@ def linear_reservoir(
     Q_base[0] = p.k_b * S[0]
 
     for t in range(1, n):
-        R = p.c_r * peff[t - 1]
+        R = p.c_r * alpha_area * peff[t - 1]
         S[t] = max(0.0, S[t - 1] + R - p.k_b * S[t - 1])
         Q_base[t] = p.k_b * S[t]
 
@@ -99,6 +106,7 @@ def add_baseflow(
     peff: np.ndarray,
     params: BaseflowParams,
     q0_obs: Optional[float] = None,
+    alpha_area: float = 1.0,
     clamp_negative: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Combina Qfast con el caudal base del reservorio.
@@ -111,7 +119,7 @@ def add_baseflow(
     (Q_total, Q_base)
     """
     q_fast = np.asarray(q_fast, dtype=float)
-    q_base, _ = linear_reservoir(peff, params, q0_obs=q0_obs)
+    q_base, _ = linear_reservoir(peff, params, q0_obs=q0_obs, alpha_area=alpha_area)
 
     if q_fast.ndim == 1:
         q_total = q_fast + q_base
