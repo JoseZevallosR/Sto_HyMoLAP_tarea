@@ -1,0 +1,21 @@
+# =====================================================================
+# model_bounds.yaml  -  Limites (bounds) de parametros calibrables
+# ---------------------------------------------------------------------
+# Documento de referencia centralizado. Los mismos valores viven en
+# base.yaml (que es el que carga el runner); este archivo sirve como
+# ficha tecnica unica de los rangos fisicamente admisibles.
+# =====================================================================
+
+ramis_fast:                  # reservorio rapido (componente fisica original)
+  mu:      [0.75, 0.95]      # coeficiente de recesion
+  lambda:  [2.0, 3.40]       # ganancia precipitacion efectiva -> caudal
+  sigma:   [0.0, 0.10]       # escala del ruido multiplicativo
+
+levy:                        # ruido estocastico alfa-estable (Chambers-Mallows-Stuck)
+  alpha:   [1.1, 1.9]        # indice de estabilidad (2 = gaussiano)
+  beta:    [-1.0, 0.0]       # asimetria
+
+baseflow:                    # reservorio lineal de flujo base (memoria hidrologica)
+  c_r:     [0.0, 1.0]        # fraccion de excedente que recarga el acuifero
+  k_b:     [0.001, 0.5]      # constante de recesion del reservorio lento
+  S0_b:    [0.0, 10.0]       # almacenamiento inicial (mm)

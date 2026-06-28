@@ -1,0 +1,61 @@
+# =====================================================================
+# base.yaml  -  Configuracion compartida por todos los experimentos
+# ---------------------------------------------------------------------
+# Define los bloques globales (global, pet, calibration, stochastic,
+# baseflow). El archivo experiments.yaml hereda de estos valores y solo
+# sobre-escribe lo especifico de cada experimento.
+# =====================================================================
+
+global:
+  # --- datos ---
+  data_path: data/ramis_hydro.csv
+  date_col: date
+  qobs_col: flow_obs
+  p_col: precipitation_mean
+  tmin_col: tmin
+  tmax_col: tmax
+  qsim_col: flow_sim
+  fill_obs_with_sim: false
+  csv_sep: ","
+
+  # --- particion temporal (anti-leakage) ---
+  train_fraction: 0.7        # 70% mas antiguo = calibracion; 30% = validacion
+  forecast_horizon: 1        # predecir Q(t+1) a partir de t, t-1, t-2 ...
+  lags: [0, 1, 2]
+
+  # --- reproducibilidad / salidas ---
+  seed: 42
+  output_root: outputs/experiments
+
+pet:
+  method: hargreaves_samani
+  latitude: -15.0            # cuenca Ramis (Puno, Peru)
+
+calibration:
+  n_param_samples: 800       # combinaciones de parametros muestreadas (Monte Carlo)
+  n_iter: 400                # trayectorias por combinacion en la busqueda
+  top_frac: 0.10             # fraccion top-K retenida (mejor 10% por J)
+  mu_bounds: [0.75, 0.95]
+  lambda_bounds: [2.0, 3.4]
+  sigma_bounds: [0.0, 0.10]
+  objective:
+    # J = w_nse*(1-NSE) + w_kge*(1-KGE) + w_pbias*|PBIAS/100| + w_cov*|0.95-PICP|
+    weights:
+      nse: 0.40
+      kge: 0.30
+      pbias: 0.15
+      coverage: 0.15
+    target_coverage: 0.95
+
+stochastic:
+  n_trajectories: 400        # tamano del ensemble Monte Carlo (Levy)
+  levy:
+    alpha_bounds: [1.1, 1.9]
+    beta_bounds: [-1.0, 0.0]
+
+baseflow:
+  enabled: false             # cada experimento decide si lo activa
+  calibrate: true            # c_r, k_b, S0_b se calibran junto a RAMIS
+  c_r_bounds: [0.0, 1.0]
+  k_b_bounds: [0.001, 0.5]
+  S0_b_bounds: [0.0, 10.0]

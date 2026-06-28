@@ -1,0 +1,155 @@
+# =====================================================================
+# experiments.yaml  -  Matriz de experimentos StoHyMoLAP / RAMIS
+# ---------------------------------------------------------------------
+# Archivo AUTOCONTENIDO: incluye los bloques globales (identicos a
+# base.yaml) y la definicion de los 9 experimentos. Se ejecuta con:
+#
+#   python scripts/run_experiment.py --config configs/experiments.yaml \
+#          --experiment E1_RAMIS_DET_BF
+#   python scripts/run_all_experiments.py --config configs/experiments.yaml
+# =====================================================================
+
+global:
+  data_path: data/ramis_hydro.csv
+  date_col: date
+  qobs_col: flow_obs
+  p_col: precipitation_mean
+  tmin_col: tmin
+  tmax_col: tmax
+  qsim_col: flow_sim
+  fill_obs_with_sim: false
+  csv_sep: ","
+  train_fraction: 0.7
+  forecast_horizon: 1
+  lags: [0, 1, 2]
+  seed: 42
+  output_root: outputs/experiments
+
+pet:
+  method: hargreaves_samani
+  latitude: -15.0
+
+calibration:
+  n_param_samples: 800
+  n_iter: 400
+  top_frac: 0.10
+  mu_bounds: [0.75, 0.95]
+  lambda_bounds: [2.0, 3.4]
+  sigma_bounds: [0.0, 0.10]
+  objective:
+    weights:
+      nse: 0.40
+      kge: 0.30
+      pbias: 0.15
+      coverage: 0.15
+    target_coverage: 0.95
+
+stochastic:
+  n_trajectories: 400
+  levy:
+    alpha_bounds: [1.1, 1.9]
+    beta_bounds: [-1.0, 0.0]
+
+baseflow:
+  enabled: false
+  calibrate: true
+  c_r_bounds: [0.0, 1.0]
+  k_b_bounds: [0.001, 0.5]
+  S0_b_bounds: [0.0, 10.0]
+
+# ---------------------------------------------------------------------
+# Definicion de experimentos
+# ---------------------------------------------------------------------
+experiments:
+
+  # ----- E1: RAMIS deterministico + flujo base --------------------------
+  E1_RAMIS_DET_BF:
+    description: "RAMIS deterministico fisico con reservorio de flujo base."
+    model_type: physical
+    stochastic: false
+    baseflow: true
+
+  # ----- E2: RAMIS estocastico (Levy) + flujo base ----------------------
+  E2_RAMIS_LEVY_BF:
+    description: "RAMIS estocastico Levy con flujo base; ensemble + cuantiles."
+    model_type: stochastic_physical
+    stochastic: true
+    baseflow: true
+
+  # ----- E3: ML puro (sin fisica) ---------------------------------------
+  E3_ML_PURE:
+    description: "XGBoost puro sobre forzantes observadas (P, PET, Tmin, Tmax) + lags."
+    model_type: machine_learning
+    ml_model: xgboost
+    stochastic: false
+    baseflow: false
+    features:
+      source: observed_forcing
+      variables: [P, PET, Tmin, Tmax]
+      lags: [0, 1, 2]
+
+  # ----- E4: Hibrido RAMIS-Levy -> XGBoost sobre la media ---------------
+  E4_RAMIS_XGB_MEAN:
+    description: "Hibrido: XGBoost corrige la media del ensemble RAMIS-Levy."
+    model_type: hybrid
+    ml_model: xgboost
+    stochastic: true
+    baseflow: true
+    features:
+      source: stochastic_ensemble
+      variables: [Qmean]
+      lags: [0, 1, 2]
+
+  # ----- E5: Hibrido RAMIS-Levy -> XGBoost con cuantiles ----------------
+  E5_RAMIS_XGB_QUANTILE:
+    description: "Hibrido: XGBoost usa media, cuantiles y anchos del ensemble."
+    model_type: hybrid
+    ml_model: xgboost
+    stochastic: true
+    baseflow: true
+    features:
+      source: stochastic_ensemble
+      variables: [Qmean, q05, q25, q50, q75, q95, width_q95_q05, width_q75_q25]
+      lags: [0, 1, 2]
+
+  # ----- E6: Hibrido secuencial RAMIS-Levy -> GRU sobre la media --------
+  E6_RAMIS_GRU_MEAN:
+    description: "Hibrido secuencial: GRU sobre secuencias de Qmean del ensemble."
+    model_type: hybrid_sequence
+    ml_model: gru
+    stochastic: true
+    baseflow: true
+    sequence_length: 7
+    features:
+      source: stochastic_ensemble
+      variables: [Qmean]
+
+  # ----- E7: Hibrido secuencial RAMIS-Levy -> GRU con cuantiles ---------
+  E7_RAMIS_GRU_QUANTILE:
+    description: "Hibrido secuencial: GRU sobre Qmean, cuantiles, anchos y Qbase."
+    model_type: hybrid_sequence
+    ml_model: gru
+    stochastic: true
+    baseflow: true
+    sequence_length: 7
+    features:
+      source: stochastic_ensemble
+      variables: [Qmean, q05, q25, q50, q75, q95, width_q95_q05, width_q75_q25, Qbase]
+
+  # ===================================================================
+  # Ablaciones: aislar el efecto del reservorio de flujo base
+  # ===================================================================
+
+  # ----- A1: RAMIS-Levy SIN flujo base ----------------------------------
+  A1_RAMIS_LEVY_NOBF:
+    description: "Ablacion: RAMIS-Levy SIN reservorio de flujo base."
+    model_type: stochastic_physical
+    stochastic: true
+    baseflow: false
+
+  # ----- A2: RAMIS-Levy CON flujo base ----------------------------------
+  A2_RAMIS_LEVY_BF:
+    description: "Ablacion: RAMIS-Levy CON reservorio de flujo base."
+    model_type: stochastic_physical
+    stochastic: true
+    baseflow: true
