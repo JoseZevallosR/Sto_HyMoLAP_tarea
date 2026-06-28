@@ -88,6 +88,7 @@ class ExperimentConfig:
     calibration: Dict[str, Any] = field(default_factory=dict)
     stochastic: Dict[str, Any] = field(default_factory=dict)
     baseflow: Dict[str, Any] = field(default_factory=dict)
+    evaluation: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, cfg: Dict[str, Any], experiment_id: str) -> "ExperimentConfig":
@@ -106,6 +107,7 @@ class ExperimentConfig:
             calibration=cfg.get("calibration", {}),
             stochastic=cfg.get("stochastic", {}),
             baseflow=cfg.get("baseflow", {}),
+            evaluation=cfg.get("evaluation", {}),
         )
 
     # --- accesos cómodos -------------------------------------------------

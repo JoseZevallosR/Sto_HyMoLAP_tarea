@@ -9,12 +9,14 @@ en ``outputs/comparison/``:
 * regime_metrics_comparison.csv
 * uncertainty_comparison.csv
 * ablation_effects.csv
+* evaluation_window_comparison.csv
 * best_model_summary.md
 * figures/*.png
 """
 from __future__ import annotations
 
 from pathlib import Path
+import json
 from typing import Any, Dict, List, Optional
 
 import matplotlib
@@ -118,6 +120,37 @@ def build_regime_comparison(exp_root: Path, experiment_ids: List[str]) -> pd.Dat
             frames.append(df)
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
+
+
+def build_evaluation_window_comparison(exp_root: Path, experiment_ids: List[str]) -> pd.DataFrame:
+    """Reune metadatos de ventana comun por experimento."""
+    rows = []
+    for eid in experiment_ids:
+        p = exp_root / eid / "evaluation_window.json"
+        if not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            continue
+        val = data.get("validation", {}) or {}
+        tr = data.get("train", {}) or {}
+        rows.append({
+            "experiment": eid,
+            "enabled": data.get("enabled"),
+            "mode": data.get("mode"),
+            "start_offset": data.get("start_offset"),
+            "end_trim": data.get("end_trim"),
+            "validation_start_date": val.get("start_date"),
+            "validation_end_date": val.get("end_date"),
+            "n_validation_before_window": val.get("n_before"),
+            "n_validation_after_window": val.get("n_after"),
+            "train_start_date": tr.get("start_date"),
+            "train_end_date": tr.get("end_date"),
+            "n_train_before_window": tr.get("n_before"),
+            "n_train_after_window": tr.get("n_after"),
+        })
+    return pd.DataFrame(rows)
 
 def build_uncertainty_comparison(results: pd.DataFrame) -> pd.DataFrame:
     cols = [c for c in ["experiment", "PICP", "PINAW", "MPIW", "Winkler"] if c in results.columns]
@@ -294,6 +327,7 @@ def run_comparison(
     regime = build_regime_comparison(exp_root, experiment_ids)
     uncertainty = build_uncertainty_comparison(results)
     ablations = build_ablation_effects(results)
+    eval_windows = build_evaluation_window_comparison(exp_root, experiment_ids)
 
     leaderboard.to_csv(comparison_root / "leaderboard.csv", index=False)
     matrix.to_csv(comparison_root / "experiment_matrix.csv", index=False)
@@ -301,6 +335,7 @@ def run_comparison(
     regime.to_csv(comparison_root / "regime_metrics_comparison.csv", index=False)
     uncertainty.to_csv(comparison_root / "uncertainty_comparison.csv", index=False)
     ablations.to_csv(comparison_root / "ablation_effects.csv", index=False)
+    eval_windows.to_csv(comparison_root / "evaluation_window_comparison.csv", index=False)
 
     _fig_metrics_barplot(leaderboard, fig_dir / "metrics_barplot.png")
     _fig_regime_rmse(regime, fig_dir / "regime_rmse_comparison.png")

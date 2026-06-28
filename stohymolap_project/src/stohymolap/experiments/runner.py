@@ -9,13 +9,14 @@ Implementa el flujo descrito en el pliego:
 5. Calibra RAMIS si corresponde.             11. Predice train y validation.
 6. Ejecuta RAMIS det/estocastico.            12-14. Metricas, figuras y guardado.
 
-Un mismo runner cubre la matriz Fase 3.1 seleccionando ramas
+Un mismo runner cubre la matriz Fase 3.2 seleccionando ramas
 segun ``model_type``, ``stochastic``, ``baseflow`` y ``ml_model``.
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -32,6 +33,7 @@ from ..data.preprocessing import (
     trim_to_first_valid_qobs,
 )
 from ..features.feature_builder import build_sequences, build_tabular, select_feature_columns
+from .evaluation_window import apply_common_window, resolve_evaluation_window
 from ..features.uncertainty_features import ensemble_summary_to_frame
 from ..hydro.baseflow import BaseflowParams, quickflow_initial_from_total
 from ..hydro.ramis import simulate_fast_deterministic
@@ -88,6 +90,7 @@ class ExperimentRunner:
             "calibration": self.ec.calibration,
             "stochastic": self.ec.stochastic,
             "baseflow": self.ec.baseflow,
+            "evaluation": self.ec.evaluation,
             "experiment": self.ec.exp,
         }
         dump_config(used, self.out_dir / "config_used.yaml")
@@ -345,7 +348,12 @@ class ExperimentRunner:
             Xv, yv, valid_v = build_tabular(fval, y_val, cols, lags, horizon)
             checks.check_lags_no_future(horizon)
             ptr, pv, model = fit_predict_tabular(model, Xtr.to_numpy(), ytr.to_numpy(), Xv.to_numpy())
-            self._ml_index = {"train_y": ytr.to_numpy(), "val_y": yv.to_numpy()}
+            self._ml_index = {
+                "train_y": ytr.to_numpy(),
+                "val_y": yv.to_numpy(),
+                "train_target_idx": valid_tr.nonzero()[0] + horizon,
+                "val_target_idx": valid_v.nonzero()[0] + horizon,
+            }
 
         self._ml_backend = getattr(model, "backend", "unknown")
         model.save(self.out_dir / "model_artifact" / "model.joblib")
@@ -398,6 +406,31 @@ class ExperimentRunner:
         obs_tr, sim_tr, dates_tr = self._align_obs(train, pred_train, "train")
         obs_v, sim_v, dates_v = self._align_obs(val, pred_val, "val")
 
+        window = resolve_evaluation_window(self.full_cfg)
+        dates_tr, (obs_tr, sim_tr), win_tr = apply_common_window(
+            train["date"].to_numpy(), dates_tr, (obs_tr, sim_tr), window
+        )
+        dates_v, (obs_v, sim_v), win_v = apply_common_window(
+            val["date"].to_numpy(), dates_v, (obs_v, sim_v), window
+        )
+        if len(obs_v) == 0:
+            raise ValueError(
+                f"{self.experiment_id}: la ventana comun de evaluacion dejo validation vacio. "
+                f"Revisa evaluation.common_window o la longitud de validation."
+            )
+        (self.out_dir / "evaluation_window.json").write_text(
+            json.dumps({
+                **window.to_dict(),
+                "train": win_tr,
+                "validation": win_v,
+            }, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        _log.info(
+            "Ventana comun evaluacion: validation %s a %s | n=%d/%d",
+            win_v.get("start_date"), win_v.get("end_date"), win_v.get("n_after"), win_v.get("n_before")
+        )
+
         checks.check_lengths_match(obs_v, sim_v)
         checks.check_non_negative_q(sim_v)
 
@@ -420,9 +453,8 @@ class ExperimentRunner:
         unc = {}
         lo_v = up_v = None
         if sim_val is not None and sim_val.lower is not None:
-            m = len(obs_v)
-            lo_v = np.asarray(sim_val.lower, dtype=float)[-m:]
-            up_v = np.asarray(sim_val.upper, dtype=float)[-m:]
+            lo_v = self._values_for_dates(val, sim_val.lower, dates_v)
+            up_v = self._values_for_dates(val, sim_val.upper, dates_v)
             checks.check_quantiles_ordered(lo_v, up_v)
             band_metrics = all_uncertainty(obs_v, lo_v, up_v, alpha=0.05)
             if mt == "stochastic_physical":
@@ -452,7 +484,7 @@ class ExperimentRunner:
             ens_df.to_csv(self.out_dir / "ensemble_summary.csv", index=False)
 
         # --- figuras ---
-        precip_v = val["P"].to_numpy()[-len(obs_v):]
+        precip_v = self._values_for_dates(val, val["P"].to_numpy(), dates_v)
         lo_plot, up_plot = lo_v, up_v  # ya recortados a len(obs_v)
         plot_hydrograph(obs_v, sim_v, f"{self.experiment_id} validacion",
                         self.fig_dir / "hydrograph_validation.png",
@@ -481,9 +513,23 @@ class ExperimentRunner:
             "metrics_train": det_tr,
             "uncertainty": unc,
             "regime": regime_v,
+            "n_eval_train": int(len(obs_tr)),
             "n_eval_validation": int(len(obs_v)),
+            "evaluation_window": {**window.to_dict(), "train": win_tr, "validation": win_v},
             "backend": getattr(self, "_ml_backend", "physical"),
         }
+
+    def _values_for_dates(self, subset: pd.DataFrame, values, target_dates) -> np.ndarray:
+        """Extrae valores del subconjunto original para fechas ya alineadas.
+
+        Evita usar recortes tipo ``[-m:]`` cuando ML descarta filas internas por
+        NaN. Si hay fechas repetidas, conserva la primera aparicion.
+        """
+        idx = pd.to_datetime(subset["date"])
+        ser = pd.Series(np.asarray(values, dtype=float), index=idx)
+        ser = ser[~ser.index.duplicated(keep="first")]
+        out = ser.reindex(pd.to_datetime(target_dates)).to_numpy(dtype=float)
+        return out
 
     # --------------------------------------------------------- alignment utils
     def _align_obs(self, subset, pred, which) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -496,7 +542,12 @@ class ExperimentRunner:
         # Hubo recorte: las predicciones corresponden a las ultimas filas.
         if hasattr(self, "_ml_index") and "train_y" in self._ml_index:
             y = self._ml_index["train_y" if which == "train" else "val_y"]
-            dates = subset["date"].to_numpy()[-len(y):]
+            idx_key = "train_target_idx" if which == "train" else "val_target_idx"
+            if idx_key in self._ml_index:
+                idx = np.asarray(self._ml_index[idx_key], dtype=int)
+                dates = subset["date"].to_numpy()[idx]
+            else:
+                dates = subset["date"].to_numpy()[-len(y):]
             return (np.asarray(y, dtype=float), pred[: len(y)], dates)
         if hasattr(self, "_ml_index") and "ytr" in self._ml_index:
             y = self._ml_index["ytr" if which == "train" else "yv"]

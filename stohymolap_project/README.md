@@ -32,7 +32,7 @@ stohymolap_project/
 │   └── model_bounds.yaml         # ficha de límites de parámetros
 ├── data/
 │   └── ramis_hydro.csv           # serie diaria (date, P, Tmin, Tmax, flow_obs)
-├── docs/diagrams/                # 8 diagramas Mermaid (.mmd)
+├── docs/diagrams/                # 9 diagramas Mermaid (.mmd)
 ├── scripts/
 │   ├── run_experiment.py         # ejecuta UN experimento
 │   ├── run_all_experiments.py    # ejecuta la matriz + comparación
@@ -110,7 +110,7 @@ python scripts/summarize_results.py --config configs/experiments.yaml
 
 ## 5. Matriz de experimentos
 
-Fase 3.1 usa una matriz canónica sin duplicados. Los siete primeros son la
+Fase 3.2 usa una matriz canónica sin duplicados y una ventana común de evaluación. Los siete primeros son la
 matriz mínima publicable; E7/E8 son extensiones secuenciales opcionales.
 
 | ID | Modelo | Estocástico | Flujo base | ML | Rol |
@@ -132,6 +132,27 @@ Lecturas directas de ablación:
 - **Ruido Lévy con memoria:** E3 - E1.
 - **ML puro vs física:** E4 - E3.
 - **Hibridación:** E5/E6/E7/E8 frente a E3 y E4.
+
+## 5.1. Ventana común de evaluación
+
+La comparación Fase 3.2 recorta todos los experimentos a una misma ventana de
+fechas objetivo. Esto evita que los modelos físicos compitan con más días de
+validación que los modelos ML/híbridos, que pierden días iniciales por lags o
+longitud de secuencia. La política se controla en:
+
+```yaml
+evaluation:
+  common_window:
+    enabled: true
+    mode: declared_matrix_max_warmup
+    start_offset: auto
+    end_trim: 0
+```
+
+Con la matriz E0-E8 actual, `start_offset: auto` infiere 7 días porque la GRU usa
+`sequence_length=7` y `forecast_horizon=1`. Cada experimento guarda
+`evaluation_window.json` y la comparación consolida
+`evaluation_window_comparison.csv`.
 
 ## 6. Nuevos componentes científicos
 
@@ -163,7 +184,7 @@ Todas estas invariantes se verifican en `validation_checks.py`.
 
 `config_used.yaml`, `best_parameters.csv`, `top_k_parameters.csv`,
 `metrics_train.csv`, `metrics_validation.csv`, `metrics_by_regime.csv`,
-`uncertainty_metrics.csv` (solo físico-estocásticos donde la banda corresponde a Qsim), `physical_uncertainty_reference.csv` (híbridos), `predictions_train.csv`,
+`uncertainty_metrics.csv` (solo físico-estocásticos donde la banda corresponde a Qsim), `physical_uncertainty_reference.csv` (híbridos), `evaluation_window.json`, `predictions_train.csv`,
 `predictions_validation.csv`, `ensemble_summary.csv` (estocásticos),
 `model_artifact/` (modelos ML), `run.log`, y `figures/` con hidrogramas,
 dispersión, curva de duración, banda de incertidumbre, residuos por régimen y
@@ -173,7 +194,7 @@ diagrama de Taylor.
 
 `leaderboard.csv`, `experiment_matrix.csv`, `validation_metrics_comparison.csv`,
 `regime_metrics_comparison.csv`, `uncertainty_comparison.csv`,
-`ablation_effects.csv`, `best_model_summary.md` y `figures/` (barras de métricas, hidrogramas de los
+`ablation_effects.csv`, `evaluation_window_comparison.csv`, `best_model_summary.md` y `figures/` (barras de métricas, hidrogramas de los
 mejores modelos, comparación de curvas de duración y RMSE por régimen).
 
 ## 9. Cómo interpretar los resultados

@@ -476,3 +476,85 @@ def test_phase31_comparison_matrix_and_ablation_effects(tmp_path):
     assert np.isclose(ab.loc["stochastic_baseflow", "delta_NSE"], 0.15)
     assert np.isclose(ab.loc["stochastic_baseflow", "delta_RMSE"], -0.3)
     assert np.isclose(ab.loc["stochastic_baseflow", "delta_abs_PBIAS_improvement"], 10.0)
+
+
+def test_phase32_common_window_infers_canonical_warmup():
+    from stohymolap.experiments.evaluation_window import resolve_evaluation_window
+    from stohymolap.utils.config import load_config
+
+    cfg = load_config(Path(__file__).resolve().parents[1] / "configs" / "experiments.yaml")
+    win = resolve_evaluation_window(cfg)
+
+    assert win.enabled is True
+    assert win.mode == "declared_matrix_max_warmup"
+    assert win.start_offset == 7
+    assert win.end_trim == 0
+
+
+def test_phase32_common_validation_window_equalizes_physical_and_ml(tmp_path, monkeypatch):
+    from stohymolap.experiments.registry import run_experiment
+    import stohymolap.experiments.runner as runner_mod
+
+    class _DummyModel:
+        backend = "dummy"
+        def fit(self, X, y):
+            self.mean_ = float(np.nanmean(y))
+            return self
+        def predict(self, X):
+            return np.full(len(X), self.mean_, dtype=float)
+        def save(self, path):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            Path(path).write_text("dummy", encoding="utf-8")
+
+    monkeypatch.setattr(runner_mod, "build_model", lambda *args, **kwargs: _DummyModel())
+
+    data_path = _tiny_dataset(tmp_path)
+    cfg = {
+        "global": {
+            "data_path": str(data_path),
+            "train_fraction": 0.7,
+            "forecast_horizon": 1,
+            "lags": [0, 1, 2],
+            "seed": 9,
+            "output_root": str(tmp_path / "out"),
+            "fill_obs_with_sim": False,
+            "ramis_state_mode": "continuous_train_validation",
+        },
+        "pet": {"latitude": -15.0},
+        "calibration": {"n_param_samples": 15, "n_iter": 8, "top_frac": 0.25, "parameter_selection": "best_j"},
+        "stochastic": {"n_trajectories": 10, "levy": {}},
+        "baseflow": {"enabled": True, "calibrate": True},
+        "evaluation": {"common_window": {"enabled": True, "mode": "declared_matrix_max_warmup", "start_offset": "auto", "end_trim": 0}},
+        "experiments": {
+            "E1_RAMIS_DET_BF": {
+                "description": "physical",
+                "model_type": "physical",
+                "stochastic": False,
+                "baseflow": True,
+            },
+            "E4_ML_PURE_XGB": {
+                "description": "ml",
+                "model_type": "machine_learning",
+                "ml_model": "xgboost",
+                "stochastic": False,
+                "baseflow": False,
+                "features": {"source": "observed_forcing", "variables": ["P", "PET", "Tmin", "Tmax"], "lags": [0, 1, 2]},
+            },
+        },
+    }
+
+    run_experiment(cfg, "E1_RAMIS_DET_BF")
+    run_experiment(cfg, "E4_ML_PURE_XGB")
+
+    out = tmp_path / "out"
+    p_phys = pd.read_csv(out / "E1_RAMIS_DET_BF" / "predictions_validation.csv")
+    p_ml = pd.read_csv(out / "E4_ML_PURE_XGB" / "predictions_validation.csv")
+
+    assert len(p_phys) == len(p_ml)
+    assert p_phys["date"].iloc[0] == p_ml["date"].iloc[0]
+    assert p_phys["date"].iloc[-1] == p_ml["date"].iloc[-1]
+
+    import json
+    meta = json.loads((out / "E1_RAMIS_DET_BF" / "evaluation_window.json").read_text())
+    assert meta["start_offset"] == 3
+    assert meta["validation"]["n_after"] == len(p_phys)

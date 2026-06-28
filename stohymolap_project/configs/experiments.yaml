@@ -1,7 +1,7 @@
 # =====================================================================
 # experiments.yaml  -  Matriz experimental StoHyMoLAP / RAMIS
 # ---------------------------------------------------------------------
-# Matriz Fase 3.1: ablaciones canonicas sin repositorios separados.
+# Matriz Fase 3.2: ablaciones canonicas con ventana comun de evaluacion.
 # Objetivo: aislar memoria hidrologica (baseflow), ruido Levy y
 # post-procesamiento ML/hibrido manteniendo outputs comparables.
 #
@@ -61,8 +61,21 @@ baseflow:
   k_b_bounds: [0.001, 0.5]
   S0_b_bounds: [0.0, 10.0]
 
+# Ventana comun de evaluacion:
+# Los modelos fisicos pueden simular desde el primer dia de validacion, pero
+# ML/hibridos pierden dias iniciales por lags o secuencias. Esta politica
+# recorta TODOS los experimentos a la misma ventana objetivo, inferida desde
+# el mayor warm-up de la matriz declarada. Para la matriz E0-E8 actual:
+# max(sequence_length=7, horizon=1) => start_offset = 7.
+evaluation:
+  common_window:
+    enabled: true
+    mode: declared_matrix_max_warmup
+    start_offset: auto
+    end_trim: 0
+
 # ---------------------------------------------------------------------
-# Matriz canonica Fase 3.1
+# Matriz canonica Fase 3.2
 # ---------------------------------------------------------------------
 experiments:
 
