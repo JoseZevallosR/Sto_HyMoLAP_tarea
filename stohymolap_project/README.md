@@ -285,3 +285,43 @@ Artefactos generados en `outputs/figures/phase34/`:
 Nota de redacción científica: `E7_HYB_GRU_MEAN` y `E8_HYB_GRU_QUANTILES` deben
 reportarse según el backend real de `ml_backend.json`. Si el backend es
 `fallback_mlp_on_flattened_sequences`, no deben describirse como GRU real.
+
+## Fase 3.4C/3.5 — Paquete paper-ready de resultados
+
+La Fase 3.4C/3.5 agrega un generador de reporte reproducible para consolidar
+los artefactos ya validados por las fases 3.4A y 3.4B. No vuelve a calibrar ni
+entrenar modelos; resume las tablas existentes en `outputs/comparison/`, el
+manifest de figuras de `outputs/figures/phase34/` y los metadatos de backend.
+
+Uso recomendado después de generar las figuras:
+
+```bash
+python scripts/generate_phase34_report.py --output-root outputs
+```
+
+Artefactos generados en `outputs/reports/phase34/`:
+
+- `phase34_results_report.md`: reporte Markdown con ranking común, mejor modelo,
+  efectos de ablación, métricas por régimen, incertidumbre, disponibilidad de
+  figuras, notas de backend y checklist de reproducibilidad.
+- `phase34_report_manifest.json`: manifest del paquete de reporte.
+- `table_final_ranking_common_window.csv`: tabla principal de resultados para el
+  manuscrito, basada en la ventana común.
+- `table_selected_models_common_window.csv`: métricas de los modelos usados en
+  las figuras principales.
+- `table_ablation_effects_common_window.csv`: deltas de ablación en ventana común.
+- `table_regime_metrics_selected.csv`: métricas por régimen de los modelos
+  seleccionados.
+- `table_uncertainty_stochastic_references.csv`: diagnóstico de referencias
+  estocásticas E2/E3.
+- `table_figure_status_summary.csv`: conteo de figuras `generated`, `fallback` y
+  `skipped`.
+- `table_backend_manuscript_notes.csv`: notas para redactar correctamente el
+  backend real de ML/GRU.
+- `table_reproducibility_checklist.csv`: checklist previo a manuscrito.
+
+Nota de redacción: si `ml_backend_summary.csv` indica que E7/E8 usan
+`fallback_mlp_on_flattened_sequences`, el reporte fuerza una advertencia para no
+presentarlos como GRU recurrentes reales. En ese caso deben describirse como
+experimentos híbridos etiquetados como GRU pero ejecutados con fallback MLP sobre
+secuencias aplanadas.
