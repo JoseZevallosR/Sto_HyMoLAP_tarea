@@ -34,7 +34,12 @@ def plot_residuals_by_regime(obs, sim, p25, p75, title, output_path):
     }
     fig, ax = plt.subplots(figsize=(7, 5))
     data = [g[np.isfinite(g)] for g in groups.values()]
-    ax.boxplot(data, labels=list(groups.keys()), showfliers=False)
+    labels = list(groups.keys())
+    try:
+        ax.boxplot(data, tick_labels=labels, showfliers=False)
+    except TypeError:
+        # Matplotlib < 3.9 uses ``labels``; Matplotlib >= 3.11 removes it.
+        ax.boxplot(data, labels=labels, showfliers=False)
     ax.axhline(0, color="k", linewidth=0.8, linestyle="--")
     ax.set_ylabel("Residuo (Qsim - Qobs)")
     ax.set_title(title); ax.grid(alpha=0.25)
