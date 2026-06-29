@@ -1,28 +1,4 @@
-Hybrid hydrological modelling combines process-based structure with ML,
-but often leaves unclear which component drives improved streamflow
-prediction. We evaluate a controlled stochastic physical--ML framework
-for daily streamflow simulation in the high-Andean Ramis basin, Lake
-Titicaca system, Peru. The framework couples a RAMIS rainfall--runoff
-core, an optional baseflow reservoir, L\'{e}vy-type stochastic
-perturbations, Monte Carlo ensembles, and ML emulators trained from
-observed forcings or ensemble descriptors. Nine experiments (E0--E8)
-were evaluated over a common validation window (8 January 2009 to
-31 December 2020; $n=4367$ days), with leakage and backend audits in
-the evidence chain.
+Hybrid hydrological modelling combines process-based structure with ML, but often leaves unclear which component drives improved streamflow prediction. We evaluate a controlled stochastic physical--ML framework for daily streamflow simulation in the high-Andean Ramis basin, Lake Titicaca system, Peru. The framework couples a RAMIS rainfall--runoff core, an optional baseflow reservoir, L\'{e}vy-type stochastic perturbations, Monte Carlo ensembles, and ML emulators trained from observed forcings or ensemble descriptors. Nine experiments (E0--E8) were evaluated over a common validation window (8 January 2009 to 31 December 2020; $n=4367$ days), with leakage and backend audits in the evidence chain.
 
-Quantile descriptors from the stochastic ensemble provided the largest
-robust gain. The gradient-boosting quantile hybrid reached NSE\,=\,0.740
-and KGE\,=\,0.810, improving NSE by 0.311 over the stochastic physical
-baseline and by 0.165 over the pure ML baseline. Replacing ensemble-mean
-with ensemble-quantile features alone added 0.114 NSE, confirming that
-distributional physical descriptors carry information beyond a single
-mean trajectory. The baseflow reservoir modestly improved the
-deterministic baseline; direct L\'{e}vy perturbations produced
-inconsistent point-prediction gains. Stochastic bands were strongly
-underdispersive (PICP\,=\,0.004 vs nominal 0.95), making the ensemble
-more useful as ML features than as calibrated uncertainty. The best
-numerical run (NSE\,=\,0.849) was labelled GRU but executed as a
-fallback perceptron; it is not evidence of recurrent-network
-superiority. These findings support stochastic physical--ML
-hybridization while showing that uncertainty calibration, low-flow
-correction and backend-aware reporting remain essential.
+Quantile descriptors from the stochastic ensemble provided the largest robust gain. The gradient-boosting quantile hybrid reached NSE\,=\,0.740 and KGE\,=\,0.810, improving NSE by 0.311 over the stochastic physical baseline and by 0.165 over the pure ML baseline. Replacing ensemble-mean with ensemble-quantile features alone added 0.114 NSE, confirming that distributional physical descriptors carry information beyond a single mean trajectory. The baseflow reservoir modestly improved the deterministic baseline; direct L\'{e}vy perturbations produced inconsistent point-prediction gains. Stochastic bands were strongly underdispersive (PICP\,=\,0.004 vs nominal 0.95), making the ensemble more useful as ML features than as calibrated uncertainty. The best numerical run (NSE\,=\,0.849) was labelled GRU but executed as a fallback perceptron; it is not evidence of recurrent-network
+superiority. These findings support stochastic physical--ML hybridization while showing that uncertainty calibration, low-flow correction and backend-aware reporting remain essential.

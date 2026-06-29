@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.6.25)  28 JUN 2026 23:49
+This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.6.25)  29 JUN 2026 15:36
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -824,7 +824,7 @@ or `english'. on input line 31.
 \openout4 = `manuscript_fase09.abs'.
 
 LaTeX Font Info:    Trying to load font information for TS1+stix on input line 
-92.
+68.
  (/usr/share/texlive/texmf-dist/tex/latex/stix/ts1stix.fd
 File: ts1stix.fd 2015/04/17 v1.1.2-latex STIX TS1 font definitions
 )
@@ -832,223 +832,230 @@ File: ts1stix.fd 2015/04/17 v1.1.2-latex STIX TS1 font definitions
 
 {/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}]
 LaTeX Font Info:    Trying to load font information for LS1+stixscr on input li
-ne 105.
+ne 81.
 
 (/usr/share/texlive/texmf-dist/tex/latex/stix/ls1stixscr.fd
 File: ls1stixscr.fd 2015/04/17 v1.1.2-latex STIX script LS1 font definitions
 )
 LaTeX Font Info:    Trying to load font information for LS2+stixex on input lin
-e 105.
+e 81.
 
 (/usr/share/texlive/texmf-dist/tex/latex/stix/ls2stixex.fd
 File: ls2stixex.fd 2015/04/17 v1.1.2-latex STIX extentions LS2 font definitions
 
 )
-LaTeX Font Info:    Trying to load font information for U+msa on input line 105
-.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 81.
+
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 105
-.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 81.
+
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
 LaTeX Font Info:    Trying to load font information for LS1+stixfrak on input l
-ine 105.
+ine 81.
 
 (/usr/share/texlive/texmf-dist/tex/latex/stix/ls1stixfrak.fd
 File: ls1stixfrak.fd 2015/04/17 v1.1.2-latex STIX fraktur LS1 font definitions
 )
 LaTeX Font Info:    Trying to load font information for LS1+stixbb on input lin
-e 105.
+e 81.
 
 (/usr/share/texlive/texmf-dist/tex/latex/stix/ls1stixbb.fd
 File: ls1stixbb.fd 2015/04/17 v1.1.2-latex STIX blackboard LS1 font definitions
 
 )
 LaTeX Font Info:    Trying to load font information for LS2+stixcal on input li
-ne 105.
+ne 81.
 
 (/usr/share/texlive/texmf-dist/tex/latex/stix/ls2stixcal.fd
 File: ls2stixcal.fd 2015/04/17 v1.1.2-latex STIX calligraphic LS2 font definiti
 ons
 )
 LaTeX Font Info:    Trying to load font information for LS1+stixsf on input lin
-e 105.
+e 81.
 
 (/usr/share/texlive/texmf-dist/tex/latex/stix/ls1stixsf.fd
 File: ls1stixsf.fd 2015/04/17 v1.1.2-latex STIX sans-serif LS1 font definitions
 
 )
 LaTeX Font Info:    Trying to load font information for LS2+stixtt on input lin
-e 105.
+e 81.
 
 (/usr/share/texlive/texmf-dist/tex/latex/stix/ls2stixtt.fd
 File: ls2stixtt.fd 2015/04/17 v1.1.2-latex STIX typewriter LS2 font definitions
 
 )
-Overfull \hbox (117.0831pt too wide) detected at line 105
+Overfull \hbox (117.0831pt too wide) detected at line 81
 []
  []
 
 (./manuscript_fase09.abs)
 
-Package hyperref Warning: Ignoring empty anchor on input line 105.
+Package hyperref Warning: Ignoring empty anchor on input line 81.
 
 
-Package hyperref Warning: Ignoring empty anchor on input line 105.
+Package hyperref Warning: Ignoring empty anchor on input line 81.
 
 <thumbnails/cas-email.jpeg, id=12, 225.84375pt x 225.84375pt>
 File: thumbnails/cas-email.jpeg Graphic file (type jpg)
 <use thumbnails/cas-email.jpeg>
-Package pdftex.def Info: thumbnails/cas-email.jpeg  used on input line 105.
+Package pdftex.def Info: thumbnails/cas-email.jpeg  used on input line 81.
 (pdftex.def)             Requested size: 7.99838pt x 8.0pt.
-LaTeX Font Info:    Trying to load font information for T1+cmtt on input line 1
-05.
+LaTeX Font Info:    Trying to load font information for T1+cmtt on input line 8
+1.
 (/usr/share/texlive/texmf-dist/tex/latex/base/t1cmtt.fd
 File: t1cmtt.fd 2019/12/16 v2.5j Standard LaTeX font definitions
 )
 
-Package hyperref Warning: Ignoring empty anchor on input line 105.
+Package hyperref Warning: Ignoring empty anchor on input line 81.
+
+
+Package natbib Warning: Citation `ubieta2018hydrological' on page 1 undefined o
+n input line 90.
 
 LaTeX Font Info:    Trying to load font information for T1+cmss on input line 1
-49.
+06.
 (/usr/share/texlive/texmf-dist/tex/latex/base/t1cmss.fd
 File: t1cmss.fd 2019/12/16 v2.5j Standard LaTeX font definitions
 ) [1 <./thumbnails/cas-email.jpeg>] [2]
-<figures/study_area_ramis.png, id=147, 578.16pt x 578.16pt>
+<figures/study_area_ramis.png, id=144, 578.16pt x 578.16pt>
 File: figures/study_area_ramis.png Graphic file (type png)
 <use figures/study_area_ramis.png>
-Package pdftex.def Info: figures/study_area_ramis.png  used on input line 273.
+Package pdftex.def Info: figures/study_area_ramis.png  used on input line 230.
 (pdftex.def)             Requested size: 430.86494pt x 430.86647pt.
  [3] [4pdfTeX warning (ext4): destination with the same identifier (name{figure
 .1}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.363 \subsection
+l.320 \subsection
                  {Lumped rainfall--runoff core}\label{subsec:physical-core} <./
 figures/study_area_ramis.png>] [5] [6] [7pdfTeX warning (ext4): destination wit
 h the same identifier (name{table.1}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.644 
+l.601 
       ]
-<figures/method_workflow.png, id=272, 1305.87875pt x 1722.435pt>
+<figures/method_workflow.png, id=269, 1305.87875pt x 1722.435pt>
 File: figures/method_workflow.png Graphic file (type png)
 <use figures/method_workflow.png>
-Package pdftex.def Info: figures/method_workflow.png  used on input line 647.
+Package pdftex.def Info: figures/method_workflow.png  used on input line 604.
 (pdftex.def)             Requested size: 449.60223pt x 593.00546pt.
-<figures/metric_ranking_nse.png, id=276, 606.8271pt x 353.1594pt>
+<figures/metric_ranking_nse.png, id=273, 606.8271pt x 353.1594pt>
 File: figures/metric_ranking_nse.png Graphic file (type png)
 <use figures/metric_ranking_nse.png>
-Package pdftex.def Info: figures/metric_ranking_nse.png  used on input line 729
+Package pdftex.def Info: figures/metric_ranking_nse.png  used on input line 686
 .
 (pdftex.def)             Requested size: 444.91434pt x 258.93045pt.
-<figures/hydrograph_validation_common.png, id=282, 784.6113pt x 338.7054pt>
+<figures/hydrograph_validation_common.png, id=279, 784.6113pt x 338.7054pt>
 File: figures/hydrograph_validation_common.png Graphic file (type png)
 <use figures/hydrograph_validation_common.png>
 Package pdftex.def Info: figures/hydrograph_validation_common.png  used on inpu
-t line 763.
+t line 720.
 (pdftex.def)             Requested size: 458.96375pt x 198.12894pt.
-<figures/fdc_common.png, id=283, 530.4618pt x 353.1594pt>
+<figures/fdc_common.png, id=280, 530.4618pt x 353.1594pt>
 File: figures/fdc_common.png Graphic file (type png)
 <use figures/fdc_common.png>
-Package pdftex.def Info: figures/fdc_common.png  used on input line 772.
+Package pdftex.def Info: figures/fdc_common.png  used on input line 729.
 (pdftex.def)             Requested size: 444.91434pt x 296.21536pt.
  [8pdfTeX warning (ext4): destination with the same identifier (name{table.2}) 
 has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.791 
+l.748 
       ]
-<figures/ablation_effects.png, id=301, 642.9621pt x 353.1594pt>
+<figures/ablation_effects.png, id=298, 642.9621pt x 353.1594pt>
 File: figures/ablation_effects.png Graphic file (type png)
 <use figures/ablation_effects.png>
-Package pdftex.def Info: figures/ablation_effects.png  used on input line 856.
+Package pdftex.def Info: figures/ablation_effects.png  used on input line 813.
 (pdftex.def)             Requested size: 444.91434pt x 244.38615pt.
-<figures/regime_rmse.png, id=306, 676.6881pt x 352.9185pt>
+<figures/regime_rmse.png, id=303, 676.6881pt x 352.9185pt>
 File: figures/regime_rmse.png Graphic file (type png)
 <use figures/regime_rmse.png>
-Package pdftex.def Info: figures/regime_rmse.png  used on input line 910.
+Package pdftex.def Info: figures/regime_rmse.png  used on input line 867.
 (pdftex.def)             Requested size: 444.91434pt x 232.04915pt.
  [9pdfTeX warning (ext4): destination with the same identifier (name{table.3}) 
 has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.931 T
+l.888 T
        able~\ref{tab:backend} summarizes the backend audit. The XGB-labelled]
-<figures/uncertainty_diagnostics.png, id=325, 484.209pt x 295.1025pt>
+<figures/uncertainty_diagnostics.png, id=322, 484.209pt x 295.1025pt>
 File: figures/uncertainty_diagnostics.png Graphic file (type png)
 <use figures/uncertainty_diagnostics.png>
 Package pdftex.def Info: figures/uncertainty_diagnostics.png  used on input lin
-e 963.
+e 920.
 (pdftex.def)             Requested size: 444.91434pt x 271.16437pt.
 
 [10pdfTeX warning (ext4): destination with the same identifier (name{table.4}) 
 has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1050 T
+l.1007 T
         his interpretation is consistent with recent reviews of hydrologicalpdf
 TeX warning (ext4): destination with the same identifier (name{table.5}) has be
 en already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1050 T
+l.1007 T
         his interpretation is consistent with recent reviews of hydrologicalpdf
 TeX warning (ext4): destination with the same identifier (name{table.6}) has be
 en already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1050 T
+l.1007 T
         his interpretation is consistent with recent reviews of hydrological]
 [11pdfTeX warning (ext4): destination with the same identifier (name{table.7}) 
 has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1119 
-       ] [12] [13] (./manuscript_fase09.bbl [14] [15]) [16] [17pdfTeX warning (
-ext4): destination with the same identifier (name{figure.2}) has been already u
-sed, duplicate ignored
+l.1068 
+       ] [12] [13] (./manuscript_fase09.bbl [14] [15])
+
+Package natbib Warning: There were undefined citations.
+
+[16] [17pdfTeX warning (ext4): destination with the same identifier (name{figur
+e.2}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1367 \end{document}
+l.1222 \end{document}
                       <./figures/method_workflow.png>] [18pdfTeX warning (ext4)
 : destination with the same identifier (name{figure.3}) has been already used, 
 duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1367 \end{document}
+l.1222 \end{document}
                      pdfTeX warning (ext4): destination with the same identifie
 r (name{figure.4}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1367 \end{document}
+l.1222 \end{document}
                       <./figures/metric_ranking_nse.png> <./figures/hydrograph_
 validation_common.png>] [19pdfTeX warning (ext4): destination with the same ide
 ntifier (name{figure.5}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1367 \end{document}
+l.1222 \end{document}
                      pdfTeX warning (ext4): destination with the same identifie
 r (name{figure.6}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1367 \end{document}
+l.1222 \end{document}
                       <./figures/fdc_common.png> <./figures/ablation_effects.pn
 g>] [20pdfTeX warning (ext4): destination with the same identifier (name{figure
 .7}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1367 \end{document}
+l.1222 \end{document}
                      pdfTeX warning (ext4): destination with the same identifie
 r (name{figure.8}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.1367 \end{document}
+l.1222 \end{document}
                       <./figures/regime_rmse.png> <./figures/uncertainty_diagno
 stics.png>] (./manuscript_fase09.aux)
 
@@ -1058,13 +1065,13 @@ Package rerunfilecheck Info: File `manuscript_fase09.out' has not changed.
 (rerunfilecheck)             Checksum: D41D8CD98F00B204E9800998ECF8427E;0.
  ) 
 Here is how much of TeX's memory you used:
- 20704 strings out of 480112
- 367794 string characters out of 5892631
- 642630 words of memory out of 5000000
- 38219 multiletter control sequences out of 15000+600000
+ 20699 strings out of 480112
+ 367647 string characters out of 5892631
+ 639481 words of memory out of 5000000
+ 38215 multiletter control sequences out of 15000+600000
  579532 words of font info for 169 fonts, out of 8000000 for 9000
  85 hyphenation exceptions out of 8191
- 75i,14n,77p,746b,948s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 75i,14n,77p,949b,934s stack positions out of 5000i,500n,10000p,200000b,80000s
  </home/jose/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ectt0800.525p
 k> </home/jose/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecss0700.600p
 k> </home/jose/.texlive2021/texmf-var/fonts/pk/ljfour/jknappen/ec/ecss0800.600p
@@ -1082,10 +1089,10 @@ pe1/public/stix/stix-mathit.pfb></usr/share/texlive/texmf-dist/fonts/type1/publ
 ic/stix/stix-mathrm-bold.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/
 stix/stix-mathrm.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/stix/sti
 x-mathscr.pfb>
-Output written on manuscript_fase09.pdf (21 pages, 4017770 bytes).
+Output written on manuscript_fase09.pdf (21 pages, 4018434 bytes).
 PDF statistics:
- 872 PDF objects out of 1000 (max. 8388607)
- 492 compressed objects within 5 object streams
- 125 named destinations out of 1000 (max. 500000)
+ 868 PDF objects out of 1000 (max. 8388607)
+ 488 compressed objects within 5 object streams
+ 124 named destinations out of 1000 (max. 500000)
  46 words of extra memory for PDF output out of 10000 (max. 10000000)
 

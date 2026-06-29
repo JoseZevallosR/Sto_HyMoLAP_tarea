@@ -58,34 +58,10 @@
 %% ABSTRACT
 %% =====================================================================
 \begin{abstract}
-Hybrid hydrological modelling combines process-based structure with ML,
-but often leaves unclear which component drives improved streamflow
-prediction. We evaluate a controlled stochastic physical--ML framework
-for daily streamflow simulation in the high-Andean Ramis basin, Lake
-Titicaca system, Peru. The framework couples a RAMIS rainfall--runoff
-core, an optional baseflow reservoir, L\'{e}vy-type stochastic
-perturbations, Monte Carlo ensembles, and ML emulators trained from
-observed forcings or ensemble descriptors. Nine experiments (E0--E8)
-were evaluated over a common validation window (8 January 2009 to
-31 December 2020; $n=4367$ days), with leakage and backend audits in
-the evidence chain.
+Hybrid hydrological modelling combines process-based structure with ML, but often leaves unclear which component drives improved streamflow prediction. We evaluate a controlled stochastic physical--ML framework for daily streamflow simulation in the high-Andean Ramis basin, Lake Titicaca system, Peru. The framework couples a RAMIS rainfall--runoff core, an optional baseflow reservoir, L\'{e}vy-type stochastic perturbations, Monte Carlo ensembles, and ML emulators trained from observed forcings or ensemble descriptors. Nine experiments (E0--E8) were evaluated over a common validation window (8 January 2009 to 31 December 2020; $n=4367$ days), with leakage and backend audits in the evidence chain.
 
-Quantile descriptors from the stochastic ensemble provided the largest
-robust gain. The gradient-boosting quantile hybrid reached NSE\,=\,0.740
-and KGE\,=\,0.810, improving NSE by 0.311 over the stochastic physical
-baseline and by 0.165 over the pure ML baseline. Replacing ensemble-mean
-with ensemble-quantile features alone added 0.114 NSE, confirming that
-distributional physical descriptors carry information beyond a single
-mean trajectory. The baseflow reservoir modestly improved the
-deterministic baseline; direct L\'{e}vy perturbations produced
-inconsistent point-prediction gains. Stochastic bands were strongly
-underdispersive (PICP\,=\,0.004 vs nominal 0.95), making the ensemble
-more useful as ML features than as calibrated uncertainty. The best
-numerical run (NSE\,=\,0.849) was labelled GRU but executed as a
-fallback perceptron; it is not evidence of recurrent-network
-superiority. These findings support stochastic physical--ML
-hybridization while showing that uncertainty calibration, low-flow
-correction and backend-aware reporting remain essential.
+Quantile descriptors from the stochastic ensemble provided the largest robust gain. The gradient-boosting quantile hybrid reached NSE\,=\,0.740 and KGE\,=\,0.810, improving NSE by 0.311 over the stochastic physical baseline and by 0.165 over the pure ML baseline. Replacing ensemble-mean with ensemble-quantile features alone added 0.114 NSE, confirming that distributional physical descriptors carry information beyond a single mean trajectory. The baseflow reservoir modestly improved the deterministic baseline; direct L\'{e}vy perturbations produced inconsistent point-prediction gains. Stochastic bands were strongly underdispersive (PICP\,=\,0.004 vs nominal 0.95), making the ensemble more useful as ML features than as calibrated uncertainty. The best numerical run (NSE\,=\,0.849) was labelled GRU but executed as a fallback perceptron; it is not evidence of recurrent-network
+superiority. These findings support stochastic physical--ML hybridization while showing that uncertainty calibration, low-flow correction and backend-aware reporting remain essential.
 \end{abstract}
 
 \begin{highlights}
@@ -109,30 +85,11 @@ Uncertainty diagnostics \sep High-Andean basin
 %% =====================================================================
 \section{Introduction}\label{sec:introduction}
 
-Reliable daily streamflow simulation remains a central problem in
-surface-water hydrology, particularly in basins where observations are
-sparse, hydroclimatic variability is strong and operational decisions
-must still be supported by defensible discharge estimates
-\citep{razavi2013streamflow,guo2021regionalization}. These conditions
-are characteristic of many high-elevation Andean catchments. In the
-Peruvian Altiplano, precipitation is strongly seasonal, monitoring
-networks are sparse relative to the spatial heterogeneity of rainfall,
-and discharge dynamics are shaped by the alternation between sharp
-wet-season runoff response and sustained dry-season low flows
-\citep{condom2004transient,zubieta2018hydrological,lima2025modeling}.
-Such settings expose a persistent limitation of classical
-rainfall--runoff modelling: even when a conceptual model captures the
-main water-balance controls, simplified storage structures, uncertain
-parameters and imperfect meteorological inputs can lead to structural
-errors that become particularly visible under low-flow, flashy or
-climatically contrasting conditions
-\citep{van2013influence,nauditt2017conceptual,ragettli2014evaluation}.
+Reliable daily streamflow simulation remains a central problem in surface-water hydrology, particularly in basins where observations are sparse, hydroclimatic variability is strong and operational decisions must still be supported by defensible discharge estimates
+\citep{razavi2013streamflow,guo2021regionalization}. These conditions are characteristic of many high-elevation Andean catchments. In the Peruvian Altiplano, precipitation is strongly seasonal, monitoring networks are sparse relative to the spatial heterogeneity of rainfall,
+and discharge dynamics are shaped by the alternation between sharp wet-season runoff response and sustained dry-season low flows \citep{condom2004transient, ubieta2018hydrological,lima2025modeling}. Such settings expose a persistent limitation of classical rainfall--runoff modelling: even when a conceptual model captures the main water-balance controls, simplified storage structures, uncertain parameters and imperfect meteorological inputs can lead to structural errors that become particularly visible under low-flow, flashy or climatically contrasting conditions \citep{van2013influence,nauditt2017conceptual,ragettli2014evaluation}.
 
-Machine-learning (ML) models offer a complementary route because they
-can learn nonlinear rainfall--runoff relations directly from data. Large
-sample studies have shown that recurrent and other data-driven models
-can match or outperform lumped conceptual models in daily streamflow
-prediction, including in regional and basin-scale benchmarks
+Machine-learning (ML) models offer a complementary route because theycan learn nonlinear rainfall--runoff relations directly from data. Large sample studies have shown that recurrent and other data-driven models can match or outperform lumped conceptual models in daily streamflow prediction, including in regional and basin-scale benchmarks
 \citep{kratzert2019towards,lees2021benchmarking,arsenault2022continuous}.
 However, predictive skill alone does not eliminate hydrological risk.
 Purely data-driven models may be sensitive to distributional shifts,
@@ -1106,47 +1063,24 @@ must be tested against low-flow-specific metrics.
 \subsection{L\'{e}vy perturbations: useful ensemble diversity, not calibrated uncertainty}
 \label{subsec:discussion-levy}
 
-The L\'{e}vy component should be interpreted cautiously. Heavy-tailed
-perturbations are conceptually attractive in hydroclimatic settings
-where rainfall intermittency, extreme events and nonlinear runoff
-responses generate asymmetric response distributions. However, the
-current results show that adding L\'{e}vy perturbations to the physical
-model does not improve deterministic point-prediction skill. The
-E3--E1 contrast slightly reduces NSE and increases RMSE, despite a
-small gain in KGE. The perturbations therefore do not function as a
-standalone point-prediction improvement mechanism in the current
-configuration.
 
-The uncertainty diagnostics are more restrictive. The nominal physical
-bands are strongly underdispersive, with PICP far below the nominal
-0.95 target. This means that the ensemble spread is too narrow to be
-used as calibrated predictive uncertainty. In probabilistic hydrology,
-sharp intervals are valuable only when they are also reliable; scoring
-or reporting narrow bands without adequate coverage can be misleading
-\citep{atger1999skill,franz2011evaluating,papacharalampous2022review}. Similar underdispersion has been reported in hydrological ensemble
-prediction when forcing, parameter, structural and initial-state
-uncertainties are not represented jointly
-\citep{demirel2013effect,thiboult2016accounting,crochemore2016bias}.
-The present stochastic configuration perturbs the physical response but does not yet
-provide a full uncertainty propagation and post-processing chain.
+The L\'{e}vy component should be interpreted cautiously. Heavy-tailed perturbations are conceptually attractive in hydroclimatic settings where rainfall intermittency, extreme events and nonlinear runoff responses generate asymmetric response distributions. However, the current results show that adding L\'{e}vy perturbations to the physical model does not improve deterministic point-prediction skill. The E3--E1 contrast slightly reduces NSE and increases RMSE, despite a small gain in KGE. The perturbations therefore do not function as a standalone point-prediction improvement mechanism in the current configuration.
 
-The negative uncertainty result does not make the stochastic ensemble
-irrelevant. It changes the role assigned to it. The ensemble is not yet
-a reliable uncertainty product, but its quantiles remain informative
-features for deterministic or conditional prediction. This distinction
-is central to the paper: stochastic simulation can fail as a calibrated
-interval while still creating useful descriptors of physical-response
-asymmetry, spread and tail behaviour. The hydrological value of the
-L\'{e}vy component is therefore mediated by the ML hybrid layer, not by
-direct interval coverage.
+The uncertainty diagnostics are more restrictive. The nominal physical bands are strongly underdispersive, with PICP far below the nominal 0.95 target. The contrast between E2 (PICP\,=\,0.160) and E3 (PICP\,=\,0.004) is particularly marked. A plausible structural explanation is that the linear baseflow reservoir in E3 introduces a deterministic floor into the total discharge, replacing part of the stochastic variability that the L\'{e}vy increments enerate in the fast-flow component. When baseflow dominates low-flow periods, the ensemble trajectories converge around the reservoir signal and the resulting intervals become very narrow, regardless of the stochastic amplitude $\sigma$. This mechanism would explain why adding baseflow reduces interval width rather than improving it. The current
+calibration objective does include a coverage term, but the weight assigned to it ($w_{cov}=0.15$) may be insufficient to counteract the interval-narrowing effect of the deterministic baseflow contribution when optimised jointly with NSE, KGE and PBIAS. Verifying this
+interpretation would require a targeted experiment in which $\sigma$ is held fixed while baseflow parameters are varied, which is left for future work.
+
+This means that the ensemble spread is too narrow to be used as calibrated predictive uncertainty. In probabilistic hydrology, sharp intervals are valuable only when they are also reliable; scoring or reporting narrow bands without adequate coverage can be misleading
+\citep{atger1999skill,franz2011evaluating,papacharalampous2022review}. Similar underdispersion has been reported in hydrological ensemble prediction when forcing, parameter, structural and initial-state uncertainties are not represented jointly
+\citep{demirel2013effect,thiboult2016accounting,crochemore2016bias}. The present stochastic configuration perturbs the physical response butdoes not yet provide a full uncertainty propagation and post-processingchain.
+
+The negative uncertainty result does not make the stochastic ensemble irrelevant. It changes the role assigned to it. The ensemble is not yet a reliable uncertainty product, but its quantiles remain informative features for deterministic or conditional prediction. This distinction is central to the paper: stochastic simulation can fail as a calibrated
+interval while still creating useful descriptors of physical-response asymmetry, spread and tail behaviour. The hydrological value of the L\'{e}vy component is therefore mediated by the ML hybrid layer, not by direct interval coverage.
 
 \subsection{Why ensemble quantiles improve the hybrid model}
 \label{subsec:discussion-hybrid}
 
-The advantage of quantiles over ensemble means is the strongest and
-most defensible empirical result. An ensemble mean compresses all
-Monte Carlo members into a single central trajectory. This may be
-adequate when the conditional response distribution is approximately
+The advantage of quantiles over ensemble means is the strongest and most defensible empirical result. An ensemble mean compresses all Monte Carlo members into a single central trajectory. This may be adequate when the conditional response distribution is approximately
 symmetric and homoscedastic, but it discards information about state-
 dependent spread, skewness and tail behaviour. In the Ramis basin,
 these properties are expected to vary between wet-season peaks and
@@ -1205,126 +1139,47 @@ architecture effect with the descriptor effect already measured here.
 \subsection{Reproducibility and leakage control}
 \label{subsec:discussion-leakage}
 
-The audit tables strengthen the evidential value of the ablation by
-making the modelling and evaluation chain auditable. The analysis
-reports strict temporal splitting, non-negative lags, sequence
-construction within temporal subsets, train-only scalers and train-only
-regime thresholds. These controls address common sources of optimistic
-performance in hydrological ML, especially when temporal dependence and
-lagged predictors are present. The audit therefore supports the main
-comparative finding: the improvement of E6 over E5 and E4 is unlikely
-to be an artefact of obvious temporal leakage.
+The audit tables strengthen the evidential value of the ablation by making the modelling and evaluation chain auditable. The analysis reports strict temporal splitting, non-negative lags, sequence construction within temporal subsets, train-only scalers and train-only
+regime thresholds. These controls address common sources of optimistic performance in hydrological ML, especially when temporal dependence and lagged predictors are present. The audit therefore supports the main comparative finding: the improvement of E6 over E5 and E4 is unlikely to be an artefact of obvious temporal leakage.
 
-At the same time, the WARN status should remain visible. WARN does not
-mean that leakage was detected, but it does identify issues that affect
-scientific interpretation: missing observed-flow values, low-flow
-physical limitations, underdispersive stochastic intervals, optional
-figure entries and fallback ML backends. Keeping these warnings in the
-main manuscript or supplementary material is preferable to hiding them,
-because it clarifies which conclusions are robust and which require
-additional computation. This position is aligned with calls for more
-transparent, reproducible and auditable hydrological modelling
+At the same time, the WARN status should remain visible. WARN does not mean that leakage was detected, but it does identify issues that affect scientific interpretation: missing observed-flow values, low-flow physical limitations, underdispersive stochastic intervals, optional figure entries and fallback ML backends. Keeping these warnings in the main manuscript or supplementary material is preferable to hiding them, because it clarifies which conclusions are robust and which require additional computation. This position is aligned with calls for more transparent, reproducible and auditable hydrological modelling
 \citep{hall2021hydrologist,lees2021benchmarking,arsenault2022continuous}.
 
 
 \section{Limitations}\label{sec:limitations}
 
-Five limitations define the scope of the present evidence. First, the
-experiments labelled as GRU were not executed with a true recurrent
-backend; the audit identified fallback multilayer-perceptron execution
-on flattened sequences. These runs are therefore useful as sequentially
-labelled stress tests, but they cannot support claims about recurrent
-neural networks or long short-term memory learning in rainfall--runoff
-modelling \citep{kratzert2018rainfall}. Second, the stochastic ensemble
-is not yet a calibrated predictive-uncertainty product. Its empirical
-coverage is far below the nominal 95\% level, so its current value is as
-a source of distributional descriptors for ML correction rather than as
-an operational uncertainty band. Coverage recalibration, bias-aware
-post-processing and formal reliability assessment would be required
-before operational use \citep{thiboult2016accounting}.
+Five limitations define the scope of the present evidence. First, the experiments labelled as GRU were not executed with a true recurrent backend; the audit identified fallback multilayer-perceptron execution on flattened sequences. These runs are therefore useful as sequentially labelled stress tests, but they cannot support claims about recurrent neural networks or long short-term memory learning in rainfall--runoff modelling \citep{kratzert2018rainfall}. Second, the stochastic ensemble is not yet a calibrated predictive-uncertainty product. Its empirical coverage is far below the nominal 95\% level, so its current value is as a source of distributional descriptors for ML correction rather than as an operational uncertainty band. Coverage recalibration, bias-aware post-processing and formal reliability assessment would be required before operational use \citep{thiboult2016accounting}.
 
-Third, the low-flow problem remains only partially resolved. The linear
-baseflow reservoir improves the global deterministic baseline, but the
-regime diagnostics show that it does not remove low-flow RMSE and bias.
-Future calibration should therefore include objective functions that
-explicitly weight low flows, such as inverse-flow criteria, rather than
-relying only on global NSE, KGE or RMSE \citep{pushpalatha2012review}.
-Fourth, the physical component is lumped and was evaluated in one
-strongly seasonal high-Andean basin. The conclusions should therefore be
-read as evidence for this hydroclimatic and modelling context, not as a
-claim of universal superiority over distributed hydrological models or
-over ML-only approaches in all basins. Fifth, the audit status is
-reported as WARN rather than fully PASS because missing observations,
-backend fallbacks and physical-audit warnings remain part of the
-current evidence chain. Final submission should preserve these audit
-records and should clearly state the definitive data source, station,
-units, preprocessing decisions and calibration settings used to
-reproduce the reported experiments.
+Third, the low-flow problem remains only partially resolved. The linear baseflow reservoir improves the global deterministic baseline, but the regime diagnostics show that it does not remove low-flow RMSE and bias. Future calibration should therefore include objective functions that explicitly weight low flows, such as inverse-flow criteria, rather than
+relying only on global NSE, KGE or RMSE \citep{pushpalatha2012review}. Fourth, the physical component is lumped and was evaluated in one strongly seasonal high-Andean basin. The conclusions should therefore be read as evidence for this hydroclimatic and modelling context, not as a claim of universal superiority over distributed hydrological models or
+over ML-only approaches in all basins. Fifth, the audit status is reported as WARN rather than fully PASS because missing observations, backend fallbacks and physical-audit warnings remain part of the current evidence chain. Final submission should preserve these audit
+records and should clearly state the definitive data source, station, units, preprocessing decisions and calibration settings used to reproduce the reported experiments.
 
 %% =====================================================================
 %% 6. CONCLUSIONS
 %% =====================================================================
 \section{Conclusions}\label{sec:conclusions}
 
-This study evaluated an audit-controlled stochastic
-physical--machine-learning framework for daily streamflow simulation in
-the high-Andean Ramis basin. The central finding is that the main source
-of robust improvement is not the stochastic perturbation itself or the
-nominal complexity of the ML backend, but the use of quantile
-descriptors from the stochastic physical ensemble as features for the
-emulator.
+This study evaluated an audit-controlled stochastic physical--machine-learning framework for daily streamflow simulation in the high-Andean Ramis basin. The central finding is that the main source of robust improvement is not the stochastic perturbation itself or the
+nominal complexity of the ML backend, but the use of quantile descriptors from the stochastic physical ensemble as features for the emulator.
 
-The strongest backend-consistent hybrid, \modelid{E6_HYB_XGB_QUANTILES},
-reached NSE\,=\,0.740 and KGE\,=\,0.810 over the common validation
-period. This corresponds to a gain of 0.311 NSE relative to the full
-stochastic physical baseline and 0.165 NSE relative to the pure
-forcing-based ML baseline. Replacing ensemble-mean features with
-ensemble quantiles alone added 0.114 NSE, indicating that the
-distributional structure of the physical ensemble carries useful
-information beyond a single mean trajectory.
+The strongest backend-consistent hybrid, \modelid{E6_HYB_XGB_QUANTILES}, reached NSE\,=\,0.740 and KGE\,=\,0.810 over the common validation period. This corresponds to a gain of 0.311 NSE relative to the full stochastic physical baseline and 0.165 NSE relative to the pure forcing-based ML baseline. Replacing ensemble-mean features with ensemble quantiles alone added 0.114 NSE, indicating that the distributional structure of the physical ensemble carries useful information beyond a single mean trajectory.
 
-The deterministic physical modifications had more limited effects. The
-linear baseflow reservoir produced a modest improvement in global skill,
-consistent with the need to represent slow catchment memory, but it did
-not fully correct low-flow errors. Direct L\'{e}vy perturbations did not
-reliably improve point-prediction skill when used only inside the
-physical simulator. Their strongest contribution was indirect: they
-created ensemble spread from which informative quantile descriptors
-could be extracted for ML correction.
+The deterministic physical modifications had more limited effects. The linear baseflow reservoir produced a modest improvement in global skill, consistent with the need to represent slow catchment memory, but it did not fully correct low-flow errors. Direct L\'{e}vy perturbations did not reliably improve point-prediction skill when used only inside the
+physical simulator. Their strongest contribution was indirect: they created ensemble spread from which informative quantile descriptors could be extracted for ML correction.
 
-The uncertainty analysis shows that predictive skill and uncertainty
-reliability must be assessed separately. The stochastic physical bands
-were strongly underdispersive, with PICP\,=\,0.004 against a nominal
-0.95 target. Thus, the present ensemble should not be interpreted as a
-calibrated uncertainty forecast. It is currently better understood as a
-feature-generation mechanism whose uncertainty representation requires
-additional recalibration before operational use.
+The uncertainty analysis shows that predictive skill and uncertainty reliability must be assessed separately. The stochastic physical bands were strongly underdispersive, with PICP\,=\,0.004 against a nominal 0.95 target. Thus, the present ensemble should not be interpreted as a calibrated uncertainty forecast. It is currently better understood as a feature-generation mechanism whose uncertainty representation requires additional recalibration before operational use.
 
-The backend audit changes the interpretation of the best numerical
-score. \modelid{E8_HYB_GRU_QUANTILES} achieved the highest NSE, but it was
-executed as a fallback multilayer perceptron rather than as a true GRU.
-Consequently, the defensible conclusion is not that recurrent networks
-outperform the other models, but that quantile-based stochastic
-physical descriptors consistently improve hybrid streamflow simulation
-across the tested emulator families. Future work should rerun the
-sequential experiments with verified recurrent backends, recalibrate the
-stochastic ensemble for nominal coverage, incorporate low-flow-weighted
-objectives and test the framework across additional Altiplano basins.
+The backend audit changes the interpretation of the best numerical score. \modelid{E8_HYB_GRU_QUANTILES} achieved the highest NSE, but it was executed as a fallback multilayer perceptron rather than as a true GRU. Consequently, the defensible conclusion is not that recurrent networks outperform the other models, but that quantile-based stochastic
+physical descriptors consistently improve hybrid streamflow simulation across the tested emulator families. Future work should rerun the sequential experiments with verified recurrent backends, recalibrate the stochastic ensemble for nominal coverage, incorporate low-flow-weighted objectives and test the framework across additional Altiplano basins.
 
 %% =====================================================================
 %% DATA AVAILABILITY
 %% =====================================================================
 \section*{Data availability}
 
-The hydro-meteorological inputs used in this study consist of PISCOp
-v3.0 daily precipitation, PISCOt v1.2 daily minimum and maximum air
-temperature, and observed daily discharge from the Puente Ramis gauging
-station operated by SENAMHI-Peru. The derived catchment-mean forcing
-series, experiment tables and figure-ready outputs should be archived
-with a DOI before submission, subject to the access conditions of the
-original data providers. The final submission should include the public
-archive link and the authoritative SENAMHI/ANA metadata record for the
-streamflow observations.
+The hydro-meteorological inputs used in this study consist of PISCOp v3.0 daily precipitation, PISCOt v1.2 daily minimum and maximum air temperature, and observed daily discharge from the Puente Ramis gauging station operated by SENAMHI-Peru. The derived catchment-mean forcing series, experiment tables and figure-ready outputs should be archived
+with a DOI before submission, subject to the access conditions of the original data providers. The final submission should include the public archive link and the authoritative SENAMHI/ANA metadata record for the streamflow observations.
 
 \section*{Declaration of generative AI and AI-assisted technologies
 in the writing process}
