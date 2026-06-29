@@ -1,0 +1,201 @@
+\begin{thebibliography}{xx}
+
+\harvarditem[Adnan et~al.]{Adnan, Petroselli, Heddam, Santos \harvardand\
+  Kisi}{2021}{adnan2021comparison}
+Adnan, R.~M., Petroselli, A., Heddam, S., Santos, C. A.~G. \harvardand\ Kisi,
+  O.  \harvardyearleft 2021\harvardyearright , `Comparison of different
+  methodologies for rainfall--runoff modeling: machine learning vs conceptual
+  approach', {\em Natural Hazards} {\bf 105}(3),~2987--3011.
+
+\harvarditem[Arsenault et~al.]{Arsenault, Martel, Brunet, Brissette
+  \harvardand\ Mai}{2022}{arsenault2022continuous}
+Arsenault, R., Martel, J.-L., Brunet, F., Brissette, F. \harvardand\ Mai, J.
+  \harvardyearleft 2022\harvardyearright , `Continuous streamflow prediction in
+  ungauged basins: Long short-term memory neural networks clearly outperform
+  hydrological models', {\em Hydrology and Earth System Sciences Discussions}
+  {\bf 2022},~1--29.
+
+\harvarditem[Condom et~al.]{Condom, Coudrain, Dezetter, Brunstein, Delclaux
+  \harvardand\ Jean-Emmanuel}{2004}{condom2004transient}
+Condom, T., Coudrain, A., Dezetter, A., Brunstein, D., Delclaux, F.
+  \harvardand\ Jean-Emmanuel, S.  \harvardyearleft 2004\harvardyearright ,
+  `Transient modelling of lacustrine regressions: two case studies from the
+  andean altiplano', {\em Hydrological processes} {\bf 18}(13),~2395--2408.
+
+\harvarditem[Frame et~al.]{Frame, Kratzert, Klotz, Gauch, Shelev, Gilon,
+  Qualls, Gupta \harvardand\ Nearing}{2021}{frame2021deep}
+Frame, J., Kratzert, F., Klotz, D., Gauch, M., Shelev, G., Gilon, O., Qualls,
+  L.~M., Gupta, H.~V. \harvardand\ Nearing, G.~S.  \harvardyearleft
+  2021\harvardyearright , `Deep learning rainfall-runoff predictions of extreme
+  events', {\em Hydrology and Earth System Sciences Discussions} {\bf
+  2021},~1--20.
+
+\harvarditem[Gabellani et~al.]{Gabellani, Boni, Ferraris, Von~Hardenberg
+  \harvardand\ Provenzale}{2007}{gabellani2007propagation}
+Gabellani, S., Boni, G., Ferraris, L., Von~Hardenberg, J. \harvardand\
+  Provenzale, A.  \harvardyearleft 2007\harvardyearright , `Propagation of
+  uncertainty from rainfall to runoff: A case study with a stochastic rainfall
+  generator', {\em Advances in water resources} {\bf 30}(10),~2061--2071.
+
+\harvarditem[Guo et~al.]{Guo, Zhang, Zhang \harvardand\
+  Wang}{2021}{guo2021regionalization}
+Guo, Y., Zhang, Y., Zhang, L. \harvardand\ Wang, Z.  \harvardyearleft
+  2021\harvardyearright , `Regionalization of hydrological modeling for
+  predicting streamflow in ungauged catchments: A comprehensive review', {\em
+  Wiley Interdisciplinary Reviews: Water} {\bf 8}(1),~e1487.
+
+\harvarditem[Hall et~al.]{Hall, Saia, Popp, Dogulu, Schymanski, Drost,
+  Van~Emmerik \harvardand\ Hut}{2021}{hall2021hydrologist}
+Hall, C.~A., Saia, S.~M., Popp, A.~L., Dogulu, N., Schymanski, S.~J., Drost,
+  N., Van~Emmerik, T. \harvardand\ Hut, R.  \harvardyearleft
+  2021\harvardyearright , `A hydrologist's guide to open science', {\em
+  Hydrology and Earth System Sciences Discussions} {\bf 2021},~1--23.
+
+\harvarditem[Hong et~al.]{Hong, Hsu, Moradkhani \harvardand\
+  Sorooshian}{2006}{hong2006uncertainty}
+Hong, Y., Hsu, K.-l., Moradkhani, H. \harvardand\ Sorooshian, S.
+  \harvardyearleft 2006\harvardyearright , `Uncertainty quantification of
+  satellite precipitation estimation and monte carlo assessment of the error
+  propagation into hydrologic response', {\em Water resources research} {\bf
+  42}(8).
+
+\harvarditem[Hou{\'e}nafa et~al.]{Hou{\'e}nafa, Johnson, Ronoh \harvardand\
+  Moore}{2025}{houenafa2025hybridization}
+Hou{\'e}nafa, S.~E., Johnson, O., Ronoh, E.~K. \harvardand\ Moore, S.~E.
+  \harvardyearleft 2025\harvardyearright , `Hybridization of stochastic
+  hydrological models and machine learning methods for improving
+  rainfall-runoff modeling', {\em Results in engineering} {\bf 25},~104079.
+
+\harvarditem[Kratzert et~al.]{Kratzert, Klotz, Brenner, Schulz \harvardand\
+  Herrnegger}{2018}{kratzert2018rainfall}
+Kratzert, F., Klotz, D., Brenner, C., Schulz, K. \harvardand\ Herrnegger, M.
+  \harvardyearleft 2018\harvardyearright , `Rainfall--runoff modelling using
+  long short-term memory (lstm) networks', {\em Hydrology and Earth System
+  Sciences} {\bf 22}(11),~6005--6022.
+
+\harvarditem[Kratzert et~al.]{Kratzert, Klotz, Shalev, Klambauer, Hochreiter
+  \harvardand\ Nearing}{2019}{kratzert2019towards}
+Kratzert, F., Klotz, D., Shalev, G., Klambauer, G., Hochreiter, S. \harvardand\
+  Nearing, G.  \harvardyearleft 2019\harvardyearright , `Towards learning
+  universal, regional, and local hydrological behaviors via machine learning
+  applied to large-sample datasets', {\em Hydrology and Earth System Sciences}
+  {\bf 23}(12),~5089--5110.
+
+\harvarditem[Lees et~al.]{Lees, Buechel, Anderson, Slater, Reece, Coxon
+  \harvardand\ Dadson}{2021}{lees2021benchmarking}
+Lees, T., Buechel, M., Anderson, B., Slater, L., Reece, S., Coxon, G.
+  \harvardand\ Dadson, S.~J.  \harvardyearleft 2021\harvardyearright ,
+  `Benchmarking data-driven rainfall--runoff models in great britain: a
+  comparison of long short-term memory (lstm)-based models with four lumped
+  conceptual models', {\em Hydrology and Earth System Sciences} {\bf
+  25}(10),~5517--5534.
+
+\harvarditem[Li et~al.]{Li, Zhang, Chu, Shen \harvardand\
+  Li}{2024}{li2024process}
+Li, H., Zhang, C., Chu, W., Shen, D. \harvardand\ Li, R.  \harvardyearleft
+  2024\harvardyearright , `A process-driven deep learning hydrological model
+  for daily rainfall-runoff simulation', {\em Journal of Hydrology} {\bf
+  637},~131434.
+
+\harvarditem[Lima-Quispe et~al.]{Lima-Quispe, Ruelland, Rabatel,
+  Lavado-Casimiro \harvardand\ Condom}{2025}{lima2025modeling}
+Lima-Quispe, N., Ruelland, D., Rabatel, A., Lavado-Casimiro, W. \harvardand\
+  Condom, T.  \harvardyearleft 2025\harvardyearright , `Modeling lake
+  titicaca's water balance: the dominant roles of precipitation and
+  evaporation', {\em Hydrology and Earth System Sciences} {\bf
+  29}(3),~655--682.
+
+\harvarditem[Mekonnen et~al.]{Mekonnen, Nazemi, Mazurek, Elshorbagy
+  \harvardand\ Putz}{2015}{mekonnen2015hybrid}
+Mekonnen, B.~A., Nazemi, A., Mazurek, K.~A., Elshorbagy, A. \harvardand\ Putz,
+  G.  \harvardyearleft 2015\harvardyearright , `Hybrid modelling approach to
+  prairie hydrology: fusing data-driven and process-based hydrological models',
+  {\em Hydrological sciences journal} {\bf 60}(9),~1473--1489.
+
+\harvarditem[Mohammadi et~al.]{Mohammadi, Safari \harvardand\
+  Vazifehkhah}{2022}{mohammadi2022ihacres}
+Mohammadi, B., Safari, M. J.~S. \harvardand\ Vazifehkhah, S.  \harvardyearleft
+  2022\harvardyearright , `Ihacres, gr4j and misd-based multi
+  conceptual-machine learning approach for rainfall-runoff modeling', {\em
+  Scientific Reports} {\bf 12}(1),~12096.
+
+\harvarditem[Nauditt et~al.]{Nauditt, Birkel, Soulsby \harvardand\
+  Ribbe}{2017}{nauditt2017conceptual}
+Nauditt, A., Birkel, C., Soulsby, C. \harvardand\ Ribbe, L.  \harvardyearleft
+  2017\harvardyearright , `Conceptual modelling to assess the influence of
+  hydro-climatic variability on runoff processes in data scarce semi-arid
+  andean catchments', {\em Hydrological Sciences Journal} {\bf
+  62}(4),~515--532.
+
+\harvarditem[Okkan et~al.]{Okkan, Ersoy, Kumanlioglu \harvardand\
+  Fistikoglu}{2021}{okkan2021embedding}
+Okkan, U., Ersoy, Z.~B., Kumanlioglu, A.~A. \harvardand\ Fistikoglu, O.
+  \harvardyearleft 2021\harvardyearright , `Embedding machine learning
+  techniques into a conceptual model to improve monthly runoff simulation: A
+  nested hybrid rainfall-runoff modeling', {\em Journal of Hydrology} {\bf
+  598},~126433.
+
+\harvarditem{Papacharalampous \harvardand\
+  Tyralis}{2022}{papacharalampous2022review}
+Papacharalampous, G. \harvardand\ Tyralis, H.  \harvardyearleft
+  2022\harvardyearright , `A review of machine learning concepts and methods
+  for addressing challenges in probabilistic hydrological post-processing and
+  forecasting', {\em Frontiers in Water} {\bf 4},~961954.
+
+\harvarditem[Ragettli et~al.]{Ragettli, Cort{\'e}s, McPhee \harvardand\
+  Pellicciotti}{2014}{ragettli2014evaluation}
+Ragettli, S., Cort{\'e}s, G., McPhee, J. \harvardand\ Pellicciotti, F.
+  \harvardyearleft 2014\harvardyearright , `An evaluation of approaches for
+  modelling hydrological processes in high-elevation, glacierized andean
+  watersheds', {\em Hydrological Processes} {\bf 28}(23),~5674--5695.
+
+\harvarditem{Razavi \harvardand\ Coulibaly}{2013}{razavi2013streamflow}
+Razavi, T. \harvardand\ Coulibaly, P.  \harvardyearleft 2013\harvardyearright ,
+  `Streamflow prediction in ungauged basins: review of regionalization
+  methods', {\em Journal of hydrologic engineering} {\bf 18}(8),~958--975.
+
+\harvarditem[van Esse et~al.]{van Esse, Perrin, Booij, Augustijn, Fenicia,
+  Kavetski \harvardand\ Lobligeois}{2013}{van2013influence}
+van Esse, W.~R., Perrin, C., Booij, M.~J., Augustijn, D.~C., Fenicia, F.,
+  Kavetski, D. \harvardand\ Lobligeois, F.  \harvardyearleft
+  2013\harvardyearright , `The influence of conceptual model structure on model
+  performance: a comparative study for 237 french catchments', {\em Hydrology
+  and Earth System Sciences} {\bf 17}(10),~4227--4239.
+
+\harvarditem[Xie et~al.]{Xie, Liu, Zhang, Han, Wang \harvardand\
+  Shen}{2021}{xie2021physics}
+Xie, K., Liu, P., Zhang, J., Han, D., Wang, G. \harvardand\ Shen, C.
+  \harvardyearleft 2021\harvardyearright , `Physics-guided deep learning for
+  rainfall-runoff modeling by considering extreme events and monotonic
+  relationships', {\em Journal of Hydrology} {\bf 603},~127043.
+
+\harvarditem[Yang et~al.]{Yang, Yang, Chen, Santisirisomboon, Lu \harvardand\
+  Zhao}{2020}{yang2020physical}
+Yang, S., Yang, D., Chen, J., Santisirisomboon, J., Lu, W. \harvardand\ Zhao,
+  B.  \harvardyearleft 2020\harvardyearright , `A physical process and machine
+  learning combined hydrological model for daily streamflow simulations of
+  large watersheds with limited observation data', {\em Journal of Hydrology}
+  {\bf 590},~125206.
+
+\harvarditem[Zhong et~al.]{Zhong, Lei \harvardand\
+  Gao}{2023}{zhong2023developing}
+Zhong, L., Lei, H. \harvardand\ Gao, B.  \harvardyearleft 2023\harvardyearright
+  , `Developing a physics-informed deep learning model to simulate runoff
+  response to climate change in alpine catchments', {\em Water Resources
+  Research} {\bf 59}(6),~e2022WR034118.
+
+\harvarditem[Zhu et~al.]{Zhu, Zhu, Han, Liu, Guo, Hou, Zhao, Xu \harvardand\
+  Zhong}{2025}{zhu2025hybrid}
+Zhu, F., Zhu, O., Han, M., Liu, W., Guo, X., Hou, T., Zhao, L., Xu, C.
+  \harvardand\ Zhong, P.-a.  \harvardyearleft 2025\harvardyearright , `A hybrid
+  process-data driven framework for real-time hydrological forecasting with
+  interpretable deep learning', {\em Journal of Hydrology} p.~134082.
+
+\harvarditem[Zubieta et~al.]{Zubieta, Laqui \harvardand\
+  Lavado}{2018}{zubieta2018hydrological}
+Zubieta, R., Laqui, W. \harvardand\ Lavado, W.  \harvardyearleft
+  2018\harvardyearright , `Hydrological modeling using observed and satellite
+  precipitation datasets for the ilave river basin, 2011-2015 period, puno,
+  peru', {\em Tecnolog{\'\i}a y ciencias del agua} {\bf 9}(5),~85--105.
+
+\end{thebibliography}

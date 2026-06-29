@@ -1,0 +1,242 @@
+% StoHyMoLAP / RAMIS paper template
+% Suggested target style: Elsevier elsarticle / Results in Engineering-like structure.
+% Compile with: latexmk -pdf paper_stohymolap_template.tex
+
+\documentclass[preprint,12pt]{elsarticle}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{siunitx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{lineno}
+
+\journal{Results in Engineering}
+
+% -----------------------------------------------------------------------------
+% Macros
+% -----------------------------------------------------------------------------
+\newcommand{\Qobs}{Q_{\mathrm{obs}}}
+\newcommand{\Qsim}{Q_{\mathrm{sim}}}
+\newcommand{\NSE}{\mathrm{NSE}}
+\newcommand{\KGE}{\mathrm{KGE}}
+\newcommand{\RMSE}{\mathrm{RMSE}}
+\newcommand{\MAE}{\mathrm{MAE}}
+\newcommand{\PBIAS}{\mathrm{PBIAS}}
+\newcommand{\warningbackend}{\textbf{Backend note:} E7/E8 must not be described as real recurrent GRU models unless TensorFlow/PyTorch evidence is regenerated. In the current artefacts they use a fallback MLP on flattened sequences.}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Hybrid stochastic hydrological modelling with hydrological memory and machine learning for daily rainfall--runoff simulation}
+
+\author[inst1]{Author One}
+\author[inst2]{Author Two}
+\address[inst1]{Institution, City, Country}
+\address[inst2]{Institution, City, Country}
+
+\begin{abstract}
+% Draft after Results/Discussion are stable.
+% Suggested content:
+% 1) Problem: daily discharge simulation remains difficult under stochastic rainfall--runoff variability.
+% 2) Aim: evaluate RAMIS/StoHyMoLAP-inspired deterministic, stochastic, ML, and hybrid configurations.
+% 3) Methods: E0--E8 ablation matrix, common validation window, anti-leakage audit, metrics NSE/KGE/RMSE/MAE/PBIAS/R2.
+% 4) Results: best common-window model and main ablation effects.
+% 5) Limitation: GRU-labelled models currently executed with fallback MLP backend; stochastic bands show limited dispersion if applicable.
+% 6) Implication: hybrid physical--data-driven inputs can improve point discharge prediction when carefully audited.
+\end{abstract}
+
+\begin{keyword}
+Stochastic hydrological model \sep HyMoLAP \sep rainfall--runoff modelling \sep hybrid models \sep hydrological memory \sep machine learning \sep uncertainty
+\end{keyword}
+
+\end{frontmatter}
+
+\linenumbers
+
+% -----------------------------------------------------------------------------
+\section{Introduction}
+% Suggested structure:
+% - Importance of accurate daily streamflow simulation.
+% - Limitations of purely deterministic hydrological models under random fluctuations.
+% - Limitations of standalone ML when physical memory/process information is weak.
+% - Hybridization context: using hydrological model outputs/statistical properties as ML inputs.
+% - Gap: reproducible ablation of RAMIS/StoHyMoLAP-inspired physical memory, Lévy stochasticity, and ML/hybrid post-processing.
+% - Contributions:
+%   (i) common-window E0--E8 experimental matrix;
+%   (ii) baseflow/memory and stochastic ablation;
+%   (iii) hybrid XGB/GRU-labelled quantile configurations;
+%   (iv) anti-leakage and backend audit;
+%   (v) paper-ready figures and reproducibility package.
+
+% -----------------------------------------------------------------------------
+\section{Materials and methods}
+
+\subsection{Study area and hydro-meteorological data}
+% Describe basin, period, forcing variables, observed discharge, temporal resolution.
+% Include train/validation split and missing-data treatment.
+
+\subsection{RAMIS / HyMoLAP-inspired deterministic rainfall--runoff formulation}
+% Present deterministic core and effective precipitation logic.
+% Keep equations consistent with the implemented model.
+
+\subsection{Hydrological memory and baseflow reservoir}
+% Explain the added baseflow/memory component.
+% Link to E0 vs E1 and E2 vs E3 comparisons.
+
+\subsection{Lévy-driven stochastic extension}
+% Explain stochastic perturbation and intended uncertainty representation.
+% State how stochastic summaries enter the experimental matrix.
+% Avoid claiming well-calibrated uncertainty bands if manifest reports subdispersion.
+
+\subsection{Machine learning and hybrid configurations}
+% Describe E4 pure ML, E5/E6 hybrid XGB, E7/E8 GRU-labelled hybrids.
+% Include backend note explicitly.
+\warningbackend
+
+\subsection{Experimental matrix}
+\begin{table}[htbp]
+\centering
+\caption{Experimental matrix used for the common-window comparison. Replace values with the final table exported from the reproducibility package.}
+\label{tab:experimental_matrix}
+\begin{tabular}{llll}
+\toprule
+Experiment & Family & Main input & Purpose \\
+\midrule
+E0 & Physical & deterministic, no baseflow & baseline physical response \\
+E1 & Physical & deterministic with baseflow & hydrological memory effect \\
+E2 & Stochastic & Lévy, no baseflow & stochastic effect without memory \\
+E3 & Stochastic & Lévy with baseflow & stochastic + memory effect \\
+E4 & ML & pure XGB & data-driven baseline \\
+E5 & Hybrid & mean physical/stochastic features + XGB & hybrid mean-feature effect \\
+E6 & Hybrid & quantile features + XGB & hybrid uncertainty-feature effect \\
+E7 & Hybrid & mean features + GRU-labelled fallback & sequence-labelled hybrid mean effect \\
+E8 & Hybrid & quantile features + GRU-labelled fallback & sequence-labelled hybrid quantile effect \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Evaluation metrics and common validation window}
+% Define NSE, KGE, RMSE, MAE, PBIAS, R2 if used.
+% State that all comparisons use exact common intersection and missing Qobs are excluded.
+
+\subsection{Leakage and reproducibility checks}
+% Report anti-leakage audit status and interpretation.
+% Mention tests passed and generated manifests.
+
+% -----------------------------------------------------------------------------
+\section{Results}
+
+\subsection{Common-window model ranking}
+% Use table_final_ranking_common_window.csv.
+% Main claim: identify best model by NSE/KGE over n_eval common samples.
+
+\begin{table}[htbp]
+\centering
+\caption{Final ranking over the common validation window. Convert the CSV table to LaTeX before submission.}
+\label{tab:final_ranking_common}
+\begin{tabular}{lrrrrrrl}
+\toprule
+Model & NSE & KGE & RMSE & MAE & PBIAS & R$^2$ & Backend \\
+\midrule
+% Fill from outputs/reports/phase34/table_final_ranking_common_window.csv
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Ablation effects of baseflow, stochasticity and hybridization}
+% Use table_ablation_effects_common_window.csv.
+% Discuss deltas in NSE/KGE/RMSE/MAE/PBIAS.
+
+\subsection{Hydrograph behaviour in validation}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{outputs/figures/phase34/hydrograph_validation_common.png}
+\caption{Observed and simulated validation hydrographs for selected physical, ML and hybrid configurations over the common validation window.}
+\label{fig:hydrograph_common}
+\end{figure}
+
+\subsection{Flow-duration and scatter diagnostics}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\linewidth]{outputs/figures/phase34/fdc_common.png}
+\caption{Flow-duration curves comparing observed and simulated discharges for the selected configurations.}
+\label{fig:fdc_common}
+\end{figure}
+
+% Add selected scatter figures or a composite if later generated.
+
+\subsection{Error structure by hydrological regime}
+% Use residuals_by_regime_*.png and table_regime_metrics_selected.csv.
+% Interpret low/medium/high flow behaviour.
+
+\subsection{Stochastic reference and uncertainty-band limitations}
+% Use stochastic_reference_E2_E3.png and uncertainty table.
+% State fallback/subdispersion if reported by manifest.
+
+% -----------------------------------------------------------------------------
+\section{Discussion}
+
+\subsection{Why hydrological memory improves daily discharge simulation}
+% Interpret baseflow/reservoir as slow-flow persistence and catchment memory.
+% Connect to deterministic_baseflow and stochastic_baseflow ablations.
+
+\subsection{Role of stochastic Lévy perturbations}
+% Discuss whether stochasticity improves point metrics or mainly provides distributional features.
+% Avoid claiming uncertainty calibration unless coverage/bands support it.
+
+\subsection{Hybrid physical--machine learning gains}
+% Discuss ML as correction/mapping from physical/stochastic features to Qsim.
+% Compare pure ML vs hybrid models.
+
+\subsection{Quantile-informed features and regime-dependent performance}
+% Discuss why distributional summaries can help high/low flows.
+% Compare E6 and E8 carefully.
+
+\subsection{Comparison with previous stochastic HyMoLAP hybridization studies}
+% Compare conceptually with Houenafa et al. (2025): stochastic model outputs, mean/quantile features, physical + ML hybridization.
+% Emphasize differences: RAMIS/baseflow, common-window ablation, fallback backend caveat, current dataset.
+
+\subsection{Limitations}
+% Suggested points:
+% - E7/E8 backend fallback is not a true recurrent GRU implementation in current environment.
+% - Component plots skipped if Qfast/Qbase/Qtotal columns are absent.
+% - Stochastic bands may show subdispersion or unavailable quantile columns.
+% - Results depend on the common validation period and selected basin/data quality.
+% - WARN audits require transparent reporting even if no FAIL is found.
+
+\subsection{Implications and future work}
+% Suggested points:
+% - Re-run E7/E8 with TensorFlow/PyTorch GRU backend.
+% - Export physical components Qfast/Qbase/Qtotal.
+% - Improve stochastic coverage and calibration of quantile bands.
+% - Test transferability across basins and hydroclimatic regimes.
+
+% -----------------------------------------------------------------------------
+\section{Conclusions}
+% 4--6 concise conclusions:
+% - Best common-window model and magnitude of gain.
+% - Baseflow/memory contribution.
+% - Quantile-informed hybrid contribution.
+% - Backend caveat.
+% - Reproducibility and future work.
+
+\section*{Code and data availability}
+% Provide repository URL, commit hash, scripts, outputs and manifests.
+
+\section*{Declaration of competing interest}
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+
+\section*{Acknowledgements}
+% Optional.
+
+\bibliographystyle{elsarticle-num}
+\bibliography{references}
+
+\end{document}

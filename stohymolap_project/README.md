@@ -76,9 +76,7 @@ pip install -r requirements.txt
 | `flow_obs`           | caudal observado (m³/s)             |
 | `flow_sim` (opcional)| caudal de referencia                |
 
-> El CSV incluido es un **dataset sintético** plausible para verificar el pipeline
-> de extremo a extremo. Reemplázalo por la serie real de Ramis manteniendo las
-> columnas (o ajusta los nombres en `configs/*.yaml`).
+El CSV incluido corresponde a una **serie diaria real de la cuenca Ramis** preparada para el pipeline StoHyMoLAP. La columna `flow_obs` representa el caudal observado y se usa como variable objetivo/evaluación (`Qobs`); no debe usarse como predictor en los modelos ML/híbridos. Si existe `flow_sim`, se conserva solo como referencia opcional. La trazabilidad de la fuente original, estación, unidades y preprocesamiento debe documentarse junto con el manuscrito.
 
 ## 4. Ejecución
 

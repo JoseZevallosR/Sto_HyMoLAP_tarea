@@ -1,0 +1,91 @@
+digraph Ramis_Method {
+	concentrate=true fontsize=11 labelloc=t rankdir=TB splines=ortho
+	node [color=black fillcolor=white fontname=Helvetica fontsize=10 shape=box style="rounded,filled"]
+	edge [arrowsize=0.7 color=black fontname=Helvetica fontsize=9]
+	subgraph cluster_data {
+		color=gray50 label="1. Data and temporal protocol" style=rounded
+		D1 [label="Daily catchment series
+PISCOp v3.0 P, PISCOt v1.2 Tmin/Tmax, Qobs"]
+		D2 [label="Hargreaves-Samani PET
+Peff = max(P - PET, 0)"]
+		D3 [label="Strict temporal split
+train: 1991-09-08 to 2008-12-31
+validation: 2009-01-08 to 2020-12-31"]
+		D4 [label="Common validation intersection
+n = 4367 days"]
+		D1 -> D2
+		D2 -> D3
+		D3 -> D4
+	}
+	subgraph cluster_physical {
+		color=gray50 label="2. Physical stochastic rainfall--runoff simulator" style=rounded
+		P1 [label="RAMIS fast-flow state
+x_t = (1 - mu/lambda)x_{t-1} + Peff_t"]
+		P2 [label="Fast-flow recurrence
+Qfast_t = f(Qfast_{t-1}, x_{t-1}, mu, lambda, sigma dL_t)"]
+		P3 [label="Optional linear baseflow reservoir
+S_b,t+1 = S_b,t + c_r alpha_area Peff_t - k_b S_b,t
+Qbase_t = k_b S_b,t"]
+		P4 [label="Total discharge
+Qtotal = max(Qfast + Qbase, 0)"]
+		P5 [label="Monte Carlo Levy ensemble
+mean, median, quantiles, widths"]
+		P1 -> P2
+		P2 -> P3
+		P3 -> P4
+		P4 -> P5
+	}
+	subgraph cluster_cal {
+		color=gray50 label="3. Calibration and ablation matrix" style=rounded
+		C1 [label="Parameter sampling
+mu, lambda, sigma, alpha, beta, alpha_area, c_r, k_b, S0_b"]
+		C2 [label="Multi-objective score
+J = w_NSE(1-NSE)+w_KGE(1-KGE)+w_PBIAS|PBIAS|+w_cov|0.95-PICP|"]
+		C3 [label="Nine controlled experiments
+E0--E8: physical, stochastic, ML, hybrid"]
+		C4 [label="Ablation contrasts
+baseflow, Levy, ML, hybridization, quantiles"]
+		C1 -> C2
+		C2 -> C3
+		C3 -> C4
+	}
+	subgraph cluster_emul {
+		color=gray50 label="4. Emulator / machine-learning correction" style=rounded
+		M1 [label="Feature construction
+forcing lags or ensemble descriptors"]
+		M2 [label="XGB-labelled tabular emulator
+actual backend in this run: sklearn_hgb"]
+		M3 [label="GRU-labelled sequential emulator
+actual backend in this run: fallback MLP on flattened sequences"]
+		M4 [label="Non-negative post-processing
+Qsim = max(Qsim_raw, 0)"]
+		M1 -> M2
+		M1 -> M3
+		M2 -> M4
+		M3 -> M4
+	}
+	subgraph cluster_eval {
+		color=gray50 label="5. Evaluation and manuscript evidence" style=rounded
+		E1 [label="Deterministic metrics
+NSE, KGE, RMSE, MAE, PBIAS, R2"]
+		E2 [label="Regime metrics
+low, mid, high flows
+thresholds from train Qobs only"]
+		E3 [label="Uncertainty diagnostics
+PICP, PINAW, MPIW, Winkler"]
+		E4 [label="Anti-leakage and backend audit
+WARN but no FAIL"]
+		E5 [label="Manuscript outputs
+tables, hydrographs, FDC, scatter, residuals"]
+		E1 -> E5
+		E2 -> E5
+		E3 -> E5
+		E4 -> E5
+	}
+	D4 -> P1
+	P5 -> C1
+	C3 -> M1
+	P5 -> M1
+	M4 -> E1
+	C4 -> E5
+}

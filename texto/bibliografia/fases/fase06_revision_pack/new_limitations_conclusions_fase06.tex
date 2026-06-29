@@ -1,0 +1,84 @@
+\section{Limitations}\label{sec:limitations}
+
+Five limitations define the scope of the present evidence. First, the
+experiments labelled as GRU were not executed with a true recurrent
+backend; the audit identified fallback multilayer-perceptron execution
+on flattened sequences. These runs are therefore useful as sequentially
+labelled stress tests, but they cannot support claims about recurrent
+neural networks or long short-term memory learning in rainfall--runoff
+modelling \citep{kratzert2018rainfall}. Second, the stochastic ensemble
+is not yet a calibrated predictive-uncertainty product. Its empirical
+coverage is far below the nominal 95\% level, so its current value is as
+a source of distributional descriptors for ML correction rather than as
+an operational uncertainty band. Coverage recalibration, bias-aware
+post-processing and formal reliability assessment would be required
+before operational use \citep{thiboult2016accounting}.
+
+Third, the low-flow problem remains only partially resolved. The linear
+baseflow reservoir improves the global deterministic baseline, but the
+regime diagnostics show that it does not remove low-flow RMSE and bias.
+Future calibration should therefore include objective functions that
+explicitly weight low flows, such as inverse-flow criteria, rather than
+relying only on global NSE, KGE or RMSE \citep{pushpalatha2012review}.
+Fourth, the physical component is lumped and was evaluated in one
+strongly seasonal high-Andean basin. The conclusions should therefore be
+read as evidence for this hydroclimatic and modelling context, not as a
+claim of universal superiority over distributed hydrological models or
+over ML-only approaches in all basins. Fifth, the audit status is
+reported as WARN rather than fully PASS because missing observations,
+backend fallbacks and physical-audit warnings remain part of the
+current evidence chain. Final submission should preserve these audit
+records and should clearly state the definitive data source, station,
+units, preprocessing decisions and calibration settings used to
+reproduce the reported experiments.
+
+%% =====================================================================
+%% 6. CONCLUSIONS
+%% =====================================================================
+\section{Conclusions}\label{sec:conclusions}
+
+This study evaluated StoHyMoLAP, an audit-controlled stochastic
+physical--machine-learning framework for daily streamflow simulation in
+the high-Andean Ramis basin. The central finding is that the main source
+of robust improvement is not the stochastic perturbation itself or the
+nominal complexity of the ML backend, but the use of quantile
+descriptors from the stochastic physical ensemble as features for the
+emulator.
+
+The strongest backend-consistent hybrid, E6\_HYB\_XGB\_QUANTILES,
+reached NSE\,=\,0.740 and KGE\,=\,0.810 over the common validation
+period. This corresponds to a gain of 0.311 NSE relative to the full
+stochastic physical baseline and 0.165 NSE relative to the pure
+forcing-based ML baseline. Replacing ensemble-mean features with
+ensemble quantiles alone added 0.114 NSE, confirming that the
+distributional structure of the physical ensemble carries useful
+information beyond a single mean trajectory.
+
+The deterministic physical modifications had more limited effects. The
+linear baseflow reservoir produced a modest improvement in global skill,
+consistent with the need to represent slow catchment memory, but it did
+not fully correct low-flow errors. Direct L\'{e}vy perturbations did not
+reliably improve point-prediction skill when used only inside the
+physical simulator. Their strongest contribution was indirect: they
+created ensemble spread from which informative quantile descriptors
+could be extracted for ML correction.
+
+The uncertainty analysis shows that predictive skill and uncertainty
+reliability must be assessed separately. The stochastic physical bands
+were strongly underdispersive, with PICP\,=\,0.004 against a nominal
+0.95 target. Thus, the present ensemble should not be interpreted as a
+calibrated uncertainty forecast. It is currently better understood as a
+feature-generation mechanism whose uncertainty representation requires
+additional recalibration before operational use.
+
+The backend audit changes the interpretation of the best numerical
+score. E8\_HYB\_GRU\_QUANTILES achieved the highest NSE, but it was
+executed as a fallback multilayer perceptron rather than as a true GRU.
+Consequently, the defensible conclusion is not that recurrent networks
+outperform the other models, but that quantile-based stochastic
+physical descriptors consistently improve hybrid streamflow simulation
+across the tested emulator families. Future work should rerun the
+sequential experiments with verified recurrent backends, recalibrate the
+stochastic ensemble for nominal coverage, incorporate low-flow-weighted
+objectives and test the framework across additional Altiplano basins.
+

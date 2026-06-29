@@ -1,470 +1,337 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Generador de contexto — StoHyMoLAP Fase 3.4
-# Uso recomendado desde la raíz del repo:
+# Generador de contexto — StoHyMoLAP Fase 3.4B
+# Uso:
+#   bash generar_contexto.sh
 #   bash generar_contexto.sh --with-tests
+#   bash generar_contexto.sh --with-tests --with-audit
 #
-# Objetivo:
-#   Empaquetar el estado actual después de Fase 3.3A para continuar en otro chat
-#   con Fase 3.4: figuras, tablas finales, auditoría de leakage y redacción publicable.
-#
-# Este script NO modifica el repo. Solo lee archivos y genera:
-#   contextos/stohymolap_contexto_fase3_4_<timestamp>/
-#   contextos/stohymolap_contexto_fase3_4_<timestamp>.tar.gz
+# Objetivo: preparar un paquete pequeño y útil para continuar en otro chat
+# desde Fase 3.4A cerrada hacia Fase 3.4B figuras paper-ready.
 
 PROJECT_ROOT="$(pwd)"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-CONTEXT_BASENAME="stohymolap_contexto_fase3_4_${TIMESTAMP}"
-CONTEXT_ROOT="contextos/${CONTEXT_BASENAME}"
-FILES_ROOT="${CONTEXT_ROOT}/files"
-REPORT_MD="${CONTEXT_ROOT}/contexto_stohymolap_fase3_4.md"
-PROMPT_MD="${CONTEXT_ROOT}/prompt_siguiente_chat_fase3_4.md"
-MANIFEST_TXT="${CONTEXT_ROOT}/manifest.txt"
-PKG_FILE="contextos/${CONTEXT_BASENAME}.tar.gz"
+PHASE="fase3_4B"
+CONTEXT_DIR="contextos"
+OUT_MD="contexto_stohymolap_${PHASE}.md"
+PROMPT_MD="prompt_siguiente_chat_${PHASE}.md"
+SNAPSHOT="${CONTEXT_DIR}/stohymolap_contexto_${PHASE}_${TIMESTAMP}.tar.gz"
+FILELIST="${CONTEXT_DIR}/stohymolap_contexto_${PHASE}_${TIMESTAMP}_filelist.txt"
 
 WITH_TESTS=0
-WITH_FULL_DIFF=0
-WITH_OUTPUTS=1
-WITH_DATA_HEAD=1
-WITH_ENV=1
+WITH_AUDIT=0
+WITH_STATUS=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-tests)
       WITH_TESTS=1
+      shift
       ;;
-    --with-full-diff)
-      WITH_FULL_DIFF=1
+    --with-audit)
+      WITH_AUDIT=1
+      shift
       ;;
-    --no-outputs)
-      WITH_OUTPUTS=0
-      ;;
-    --no-data-head)
-      WITH_DATA_HEAD=0
-      ;;
-    --no-env)
-      WITH_ENV=0
+    --no-status)
+      WITH_STATUS=0
+      shift
       ;;
     -h|--help)
-      cat <<'EOF'
-Uso:
-  bash generar_contexto.sh [opciones]
+      cat <<'HELP'
+Genera contexto para StoHyMoLAP Fase 3.4B.
 
 Opciones:
-  --with-tests      Ejecuta pytest -q y guarda el resultado.
-  --with-full-diff  Incluye git diff completo, excluyendo pycache y .pyc.
-  --no-outputs      No copia outputs/comparison ni resúmenes por experimento.
-  --no-data-head    No incluye cabeceras/muestras de data/*.csv.
-  --no-env          No guarda versiones del entorno Python.
-EOF
+  --with-tests     Ejecuta pytest -q y adjunta el resumen.
+  --with-audit     Ejecuta scripts/audit_leakage_phase34.py si existe.
+  --no-status      Omite algunos diagnósticos de estado.
+HELP
       exit 0
       ;;
     *)
-      echo "Opción no reconocida: $1" >&2
+      echo "Opcion no reconocida: $1" >&2
       exit 2
       ;;
   esac
-  shift
 done
 
-mkdir -p "$FILES_ROOT"
+mkdir -p "$CONTEXT_DIR"
 
-run_capture() {
-  local outfile="$1"
+run_cmd() {
+  local title="$1"
   shift
-  {
-    echo "\$ $*"
-    echo
-    "$@"
-  } > "$outfile" 2>&1 || {
-    local rc=$?
-    echo
-    echo "[WARN] comando falló con código ${rc}" >> "$outfile"
-    return 0
-  }
-}
-
-copy_file() {
-  local src="$1"
-  [[ -f "$src" ]] || return 0
-  local dst="${FILES_ROOT}/${src}"
-  mkdir -p "$(dirname "$dst")"
-  cp -a "$src" "$dst"
-}
-
-copy_dir() {
-  local src="$1"
-  [[ -d "$src" ]] || return 0
-  local dst="${FILES_ROOT}/${src}"
-  mkdir -p "$(dirname "$dst")"
-  cp -a "$src" "$dst"
-  find "$dst" -type d -name "__pycache__" -prune -exec rm -rf {} + 2>/dev/null || true
-  find "$dst" -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.pyd" \) -delete 2>/dev/null || true
-  find "$dst" -type d -name ".pytest_cache" -prune -exec rm -rf {} + 2>/dev/null || true
-}
-
-append_file_section() {
-  local file="$1"
-  local title="${2:-$file}"
   {
     echo
     echo "## ${title}"
     echo
-    if [[ -f "$file" ]]; then
-      echo '```text'
-      sed -n '1,220p' "$file"
-      local nlines
-      nlines="$(wc -l < "$file" | tr -d ' ')"
-      if [[ "${nlines}" -gt 220 ]]; then
-        echo
-        echo "[TRUNCADO: ${nlines} líneas totales; se muestran las primeras 220]"
-      fi
-      echo '```'
-    else
-      echo "_No existe: ${file}_"
-    fi
-  } >> "$REPORT_MD"
+    echo '```text'
+    "$@" 2>&1 || true
+    echo '```'
+  } >> "$OUT_MD"
 }
 
-write_text_file() {
-  local dst="$1"
-  mkdir -p "$(dirname "$dst")"
-  cat > "$dst"
-}
-
-# 1) Copia de código/configuración esencial
-for f in \
-  README.md \
-  LICENSE \
-  pyproject.toml \
-  setup.py \
-  setup.cfg \
-  requirements.txt \
-  requirements-dev.txt \
-  environment.yml \
-  environment.yaml \
-  pytest.ini \
-  tox.ini \
-  Makefile \
-  .gitignore
-do
-  copy_file "$f"
-done
-
-copy_dir "configs"
-copy_dir "src/stohymolap"
-copy_dir "scripts"
-copy_dir "tests"
-
-# Docs: se copian, pero se excluyen caches por copy_dir.
-copy_dir "docs"
-
-# 2) Datos: solo cabeceras/muestras para evitar paquetes pesados.
-if [[ "$WITH_DATA_HEAD" -eq 1 && -d "data" ]]; then
-  mkdir -p "${FILES_ROOT}/data_samples"
-  find data -maxdepth 2 -type f \( -name "*.csv" -o -name "*.txt" -o -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) | sort | while read -r f; do
-    rel="${f#data/}"
-    sample="${FILES_ROOT}/data_samples/${rel}.head.txt"
-    mkdir -p "$(dirname "$sample")"
+append_file_if_exists() {
+  local title="$1"
+  local path="$2"
+  if [[ -f "$path" ]]; then
     {
-      echo "# Sample of ${f}"
-      echo "# Generated by generar_contexto.sh"
       echo
-      sed -n '1,80p' "$f"
-    } > "$sample" 2>/dev/null || true
-  done
-fi
-
-# 3) Outputs comparativos y resúmenes por experimento.
-if [[ "$WITH_OUTPUTS" -eq 1 ]]; then
-  copy_dir "outputs/comparison"
-
-  if [[ -d "outputs/experiments" ]]; then
-    mkdir -p "${FILES_ROOT}/outputs/experiments"
-    find outputs/experiments -mindepth 1 -maxdepth 1 -type d | sort | while read -r expdir; do
-      expname="$(basename "$expdir")"
-      dst="${FILES_ROOT}/outputs/experiments/${expname}"
-      mkdir -p "$dst"
-
-      for f in \
-        config_used.yaml \
-        run_metadata.json \
-        evaluation_window.json \
-        train_metrics.csv \
-        validation_metrics.csv \
-        validation_metrics_common_intersection.csv \
-        regime_metrics_train.csv \
-        regime_metrics_validation.csv \
-        uncertainty_metrics.csv \
-        best_parameters.csv \
-        top_k_parameters.csv \
-        postprocessing_report.json \
-        physical_uncertainty_reference.csv
-      do
-        [[ -f "${expdir}/${f}" ]] && cp -a "${expdir}/${f}" "${dst}/${f}"
-      done
-
-      # Muestras de predicciones, no archivos completos.
-      for pred in predictions_train.csv predictions_validation.csv calibration_series.csv validation_series.csv; do
-        if [[ -f "${expdir}/${pred}" ]]; then
-          {
-            echo "# Sample: ${expdir}/${pred}"
-            echo "# First 40 lines"
-            sed -n '1,40p' "${expdir}/${pred}"
-            echo
-            echo "# Last 20 lines"
-            tail -n 20 "${expdir}/${pred}"
-          } > "${dst}/${pred}.sample.txt" 2>/dev/null || true
-        fi
-      done
-    done
+      echo "## ${title}"
+      echo
+      echo "Archivo: ${path}"
+      echo
+      echo '```text'
+      cat "$path" || true
+      echo '```'
+    } >> "$OUT_MD"
   fi
+}
+
+# -----------------------------------------------------------------------------
+# 1) Contexto markdown principal
+# -----------------------------------------------------------------------------
+{
+  echo "# Contexto StoHyMoLAP — Fase 3.4B"
+  echo
+  echo "Generado: ${TIMESTAMP}"
+  echo "Proyecto: ${PROJECT_ROOT}"
+  echo
+} > "$OUT_MD"
+
+cat >> "$OUT_MD" <<'MD'
+## Estado de avance
+
+Fase 3.4A cerrada funcionalmente:
+
+- Auditor anti-leakage y QA implementado.
+- Compatibilidad con outputs legacy corregida.
+- Tests reportados por el usuario: 26 passed, 2 warnings.
+- Commit principal: d369114 — feat: add phase 3.4A leakage audit and backend QA.
+- Commit correctivo: e75439c — fix: make leakage audit compatible with legacy outputs.
+- Auditoría actual: WARN, no FAIL.
+
+Interpretación del WARN:
+
+- No se observó leakage temporal: train termina antes de validation.
+- Las ventanas de evaluación son consistentes.
+- La intersección común cubre los 9 experimentos.
+- Persisten brechas observacionales de Qobs en físicos E0-E3.
+- E7/E8 no deben redactarse como GRU real en este entorno; el backend registrado es fallback_mlp_on_flattened_sequences.
+- Algunos outputs legacy pueden requerir rerun para completar trazabilidad de postprocessing_report.json y regime_thresholds.json.
+
+## Objetivo de la Fase 3.4B
+
+Generar figuras paper-ready para StoHyMoLAP:
+
+1. Hidrograma de validación para E0, E1, E3, E4, E6 y E8.
+2. Curva de duración de caudales, FDC, comparando Qobs y Qsim.
+3. Scatter Qobs-Qsim.
+4. Residuos por régimen hidrológico.
+5. Componentes físicos Qfast, Qbase y Qtotal si están disponibles.
+6. Bandas estocásticas E2/E3 como referencia física, con advertencia explícita de subdispersión.
+7. Manifest de figuras con rutas, modelos usados, columnas requeridas y notas metodológicas.
+
+## Reglas metodológicas para 3.4B
+
+- Usar la misma ventana común/intersección exacta usada por el leaderboard.
+- No recalcular métricas con fechas distintas a las de comparación común.
+- Excluir Qobs faltante de métricas y gráficos estadísticos que lo requieran.
+- Documentar explícitamente que E7/E8 son fallback MLP si no hay TensorFlow/PyTorch.
+- No vender las bandas E2/E3 como incertidumbre calibrada; tratarlas como referencia estocástica subdispersa.
+- Guardar figuras en outputs/figures/phase34/.
+- Guardar un manifest en outputs/figures/phase34/figure_manifest.csv y/o JSON.
+MD
+
+if [[ "$WITH_STATUS" -eq 1 ]]; then
+  run_cmd "pwd" pwd
+  run_cmd "git status --short" git status --short
+  run_cmd "ultimos commits" git log --oneline -8
+  run_cmd "archivos pyc versionados" bash -lc "git ls-files | grep -E '(__pycache__|\.py[co]$)' || true"
+  run_cmd "estructura resumida" bash -lc "find . -maxdepth 3 -type f \
+    ! -path './.git/*' \
+    ! -path './contextos/*' \
+    ! -path './outputs/experiments/*/model_artifact/*' \
+    ! -path './outputs/figures/*' \
+    | sort | sed 's#^./##' | head -300"
 fi
 
-# 4) Diagnóstico Git y entorno.
-mkdir -p "${CONTEXT_ROOT}/diagnostics"
+append_file_if_exists "README" "README.md"
+append_file_if_exists "Configuracion experimental" "configs/experiments.yaml"
+append_file_if_exists "Auditoria leakage status" "outputs/comparison/leakage_audit_status.txt"
+append_file_if_exists "Auditoria leakage report" "outputs/comparison/leakage_audit_report.md"
+append_file_if_exists "Leaderboard comun" "outputs/comparison/leaderboard_common_intersection.csv"
+append_file_if_exists "Metricas validation comun" "outputs/comparison/validation_metrics_common_intersection.csv"
+append_file_if_exists "Efectos de ablacion" "outputs/comparison/ablation_effects_common_intersection.csv"
+append_file_if_exists "Metricas por regimen" "outputs/comparison/regime_metrics_comparison.csv"
+append_file_if_exists "Resumen backend ML" "outputs/comparison/ml_backend_summary.csv"
+append_file_if_exists "Issues auditoria leakage" "outputs/comparison/leakage_audit_issues.csv"
 
-run_capture "${CONTEXT_ROOT}/diagnostics/git_status_short.txt" git status --short
-run_capture "${CONTEXT_ROOT}/diagnostics/git_log_recent.txt" git log --oneline --decorate -n 20
-run_capture "${CONTEXT_ROOT}/diagnostics/git_branch.txt" git branch --show-current
-run_capture "${CONTEXT_ROOT}/diagnostics/git_rev_parse_head.txt" git rev-parse HEAD
-run_capture "${CONTEXT_ROOT}/diagnostics/git_diff_stat.txt" git diff --stat
-run_capture "${CONTEXT_ROOT}/diagnostics/git_staged_diff_stat.txt" git diff --cached --stat
-run_capture "${CONTEXT_ROOT}/diagnostics/git_tracked_pycache.txt" bash -lc "git ls-files | grep -E '(__pycache__|\\.py[co]$)' || true"
-
-if [[ "$WITH_FULL_DIFF" -eq 1 ]]; then
-  run_capture "${CONTEXT_ROOT}/diagnostics/git_diff_full_no_cache.txt" bash -lc "git diff -- . ':(exclude)*__pycache__*' ':(exclude)*.pyc'"
+if [[ "$WITH_AUDIT" -eq 1 && -f "scripts/audit_leakage_phase34.py" && -f "configs/experiments.yaml" ]]; then
+  run_cmd "Ejecucion auditoria leakage" python scripts/audit_leakage_phase34.py --config configs/experiments.yaml
+  append_file_if_exists "Auditoria leakage status posterior" "outputs/comparison/leakage_audit_status.txt"
+  append_file_if_exists "Auditoria leakage report posterior" "outputs/comparison/leakage_audit_report.md"
 fi
-
-if [[ "$WITH_ENV" -eq 1 ]]; then
-  run_capture "${CONTEXT_ROOT}/diagnostics/python_version.txt" python --version
-  run_capture "${CONTEXT_ROOT}/diagnostics/python_key_versions.txt" python - <<'PY'
-mods = ["numpy", "pandas", "scipy", "sklearn", "matplotlib", "yaml", "joblib"]
-for m in mods:
-    try:
-        mod = __import__(m)
-        print(f"{m}: {getattr(mod, '__version__', 'unknown')}")
-    except Exception as exc:
-        print(f"{m}: NOT_AVAILABLE ({exc})")
-try:
-    import torch
-    print(f"torch: {torch.__version__}")
-except Exception as exc:
-    print(f"torch: NOT_AVAILABLE ({exc})")
-try:
-    import tensorflow as tf
-    print(f"tensorflow: {tf.__version__}")
-except Exception as exc:
-    print(f"tensorflow: NOT_AVAILABLE ({exc})")
-try:
-    import xgboost
-    print(f"xgboost: {xgboost.__version__}")
-except Exception as exc:
-    print(f"xgboost: NOT_AVAILABLE ({exc})")
-PY
-fi
-
-run_capture "${CONTEXT_ROOT}/diagnostics/experiment_list.txt" python scripts/run_experiment.py --config configs/experiments.yaml --list
 
 if [[ "$WITH_TESTS" -eq 1 ]]; then
-  if command -v pytest >/dev/null 2>&1; then
-    run_capture "${CONTEXT_ROOT}/diagnostics/pytest_q.txt" pytest -q
-  else
-    write_text_file "${CONTEXT_ROOT}/diagnostics/pytest_q.txt" <<'EOF'
-pytest no está disponible como comando en este entorno.
-Instala pytest o ejecuta con el intérprete correcto.
-EOF
+  run_cmd "pytest -q" pytest -q
+fi
+
+cat >> "$OUT_MD" <<'MD'
+## Checklist para el siguiente chat
+
+Solicitar Fase 3.4B con estos entregables:
+
+- Nuevo módulo o script para generación de figuras paper-ready.
+- Funciones reutilizables para cargar predicciones por experimento.
+- Uso consistente de la ventana común.
+- Figuras guardadas en PNG y, preferentemente, SVG/PDF.
+- Manifest de figuras.
+- Tests smoke que validen que el script corre con datos mínimos.
+- README actualizado con rutas de figuras y cautelas metodológicas.
+
+## Archivos importantes esperados
+
+- configs/experiments.yaml
+- scripts/run_all_experiments.py
+- scripts/summarize_results.py
+- scripts/audit_leakage_phase34.py
+- src/stohymolap/experiments/runner.py
+- src/stohymolap/experiments/comparison.py
+- src/stohymolap/diagnostics/leakage_audit.py
+- outputs/comparison/leaderboard_common_intersection.csv
+- outputs/comparison/regime_metrics_comparison.csv
+- outputs/comparison/ml_backend_summary.csv
+- outputs/experiments/*/predictions_validation.csv
+- outputs/experiments/*/evaluation_window.json
+- outputs/experiments/*/ml_backend.json
+- outputs/experiments/*/postprocessing_report.json
+- outputs/experiments/*/regime_thresholds.json
+MD
+
+# -----------------------------------------------------------------------------
+# 2) Prompt para siguiente chat
+# -----------------------------------------------------------------------------
+cat > "$PROMPT_MD" <<'MD'
+Continuemos con StoHyMoLAP desde Fase 3.4B.
+
+Estado actual:
+
+- Fase 3.4A cerrada y commiteada.
+- Tests reportados: 26 passed, 2 warnings.
+- Auditoría anti-leakage: WARN, no FAIL.
+- No hay evidencia de leakage temporal: train y validation están separados; la ventana común es consistente.
+- Se regeneró la matriz E0-E8 y el leaderboard común.
+- E8_HYB_GRU_QUANTILES sigue como mejor modelo: NSE aproximado 0.8491, KGE aproximado 0.8986.
+- E7/E8 están declarados como GRU, pero en este entorno corren con backend fallback_mlp_on_flattened_sequences por ausencia de TensorFlow/PyTorch. No deben redactarse como GRU real.
+
+Quiero implementar la Fase 3.4B: figuras paper-ready.
+
+Objetivo:
+
+1. Crear un script, por ejemplo scripts/generate_phase34_figures.py.
+2. Guardar figuras en outputs/figures/phase34/.
+3. Generar un manifest de figuras en CSV/JSON.
+4. Actualizar README con la sección de figuras.
+5. Agregar tests smoke para validar carga de datos y generación mínima.
+
+Figuras requeridas:
+
+- Hidrograma de validación para E0_RAMIS_DET_NOBF, E1_RAMIS_DET_BF, E3_RAMIS_LEVY_BF, E4_ML_PURE_XGB, E6_HYB_XGB_QUANTILES y E8_HYB_GRU_QUANTILES.
+- FDC comparando Qobs y Qsim para modelos seleccionados.
+- Scatter Qobs-Qsim para modelos seleccionados.
+- Residuos por régimen hidrológico.
+- Componentes físicos Qfast, Qbase y Qtotal si están disponibles.
+- Bandas E2/E3 como referencia estocástica, con advertencia de subdispersión.
+
+Restricciones:
+
+- Usar la ventana común/intersección exacta ya definida por outputs/comparison.
+- Excluir Qobs faltantes en cálculos que lo requieran.
+- No introducir dependencia pesada ni seaborn.
+- Usar matplotlib/pandas/numpy.
+- No asumir que E7/E8 son GRU real; documentar backend.
+- Si una columna no existe, la figura debe degradar con advertencia controlada y registrarlo en el manifest.
+
+Primero revisa el contexto adjunto y dime qué columnas existen en predictions_validation.csv por experimento, qué figuras son directamente posibles y cuáles requieren fallback. Luego genera el parche de Fase 3.4B.
+MD
+
+# -----------------------------------------------------------------------------
+# 3) Lista de archivos para el tar.gz
+# -----------------------------------------------------------------------------
+: > "$FILELIST"
+
+add_if_exists() {
+  local p="$1"
+  if [[ -e "$p" ]]; then
+    printf '%s\n' "$p" >> "$FILELIST"
   fi
-else
-  write_text_file "${CONTEXT_ROOT}/diagnostics/pytest_q.txt" <<'EOF'
-No se ejecutó pytest. Para incluirlo:
-  bash generar_contexto.sh --with-tests
+  return 0
+}
+
+add_if_exists "$OUT_MD"
+add_if_exists "$PROMPT_MD"
+add_if_exists "README.md"
+add_if_exists "pyproject.toml"
+add_if_exists "requirements.txt"
+add_if_exists ".gitignore"
+add_if_exists "configs/experiments.yaml"
+
+for d in scripts src tests; do
+  if [[ -d "$d" ]]; then
+    find "$d" -type f \
+      ! -path '*/__pycache__/*' \
+      ! -name '*.pyc' \
+      ! -name '*.pyo' \
+      | sort >> "$FILELIST"
+  fi
+done
+
+if [[ -d "outputs/comparison" ]]; then
+  find outputs/comparison -maxdepth 1 -type f \
+    \( -name '*.csv' -o -name '*.md' -o -name '*.txt' -o -name '*.json' \) \
+    | sort >> "$FILELIST"
+fi
+
+if [[ -d "outputs/experiments" ]]; then
+  find outputs/experiments -mindepth 2 -maxdepth 2 -type f \
+    \( \
+      -name 'predictions_validation.csv' -o \
+      -name 'predictions_train.csv' -o \
+      -name 'evaluation_window.json' -o \
+      -name 'ml_backend.json' -o \
+      -name 'postprocessing_report.json' -o \
+      -name 'regime_thresholds.json' -o \
+      -name 'best_parameters.csv' \
+    \) \
+    | sort >> "$FILELIST"
+fi
+
+# Evitar duplicados y entradas inexistentes.
+sort -u "$FILELIST" -o "$FILELIST"
+
+if [[ ! -s "$FILELIST" ]]; then
+  echo "No se encontraron archivos para empaquetar." >&2
+  exit 1
+fi
+
+tar -czf "$SNAPSHOT" -T "$FILELIST"
+
+cat <<EOF
+OK: contexto generado.
+
+Markdown principal:
+  ${OUT_MD}
+
+Prompt siguiente chat:
+  ${PROMPT_MD}
+
+Paquete para adjuntar:
+  ${SNAPSHOT}
+
+Lista de archivos:
+  ${FILELIST}
+
+Uso sugerido:
+  1) Adjunta ${SNAPSHOT} en el nuevo chat.
+  2) Pega el contenido de ${PROMPT_MD}.
 EOF
-fi
-
-# 5) Reporte principal.
-cat > "$REPORT_MD" <<'EOF'
-# Contexto StoHyMoLAP — Fase 3.4
-
-## Estado resumido
-
-Proyecto: StoHyMoLAP  
-Fase actual: transición desde Fase 3.3A hacia Fase 3.4.
-
-### Fases cerradas
-
-- Fase 3.0A: saneamiento del paquete, imports y scripts base.
-- Fase 3.1: matriz experimental canónica E0–E8.
-- Fase 3.2: ventana común de evaluación.
-- Fase 3.3A: postproceso auditable Qsim >= 0 para ML/híbridos y leaderboard por intersección común.
-
-### Matriz canónica
-
-- E0_RAMIS_DET_NOBF
-- E1_RAMIS_DET_BF
-- E2_RAMIS_LEVY_NOBF
-- E3_RAMIS_LEVY_BF
-- E4_ML_PURE_XGB
-- E5_HYB_XGB_MEAN
-- E6_HYB_XGB_QUANTILES
-- E7_HYB_GRU_MEAN
-- E8_HYB_GRU_QUANTILES
-
-### Puntos críticos para revisar en Fase 3.4
-
-1. Auditoría de leakage entre train/validation.
-2. Figuras para paper: hidrogramas, FDC, dispersión Qobs-Qsim, residuos por régimen, bandas físicas.
-3. Tablas finales: leaderboard común, métricas por régimen, efectos de ablación.
-4. Incertidumbre: E2/E3 tienen PICP bajo; no presentar bandas como incertidumbre calibrada sin ajustar.
-5. E7/E8 pueden estar usando fallback MLP si no existe TensorFlow/PyTorch. No llamarlos “GRU real” sin confirmar backend.
-6. Revisar si el repo aún tiene `__pycache__` o `.pyc` versionados.
-7. Evitar incluir `../texto/` u otros directorios externos accidentales.
-
-EOF
-
-append_file_section "${CONTEXT_ROOT}/diagnostics/git_status_short.txt" "Git status corto"
-append_file_section "${CONTEXT_ROOT}/diagnostics/git_log_recent.txt" "Commits recientes"
-append_file_section "${CONTEXT_ROOT}/diagnostics/git_tracked_pycache.txt" "Archivos cache versionados detectados"
-append_file_section "${CONTEXT_ROOT}/diagnostics/experiment_list.txt" "Lista de experimentos"
-
-if [[ -f "outputs/comparison/leaderboard_common_intersection.csv" ]]; then
-  append_file_section "outputs/comparison/leaderboard_common_intersection.csv" "Leaderboard común por intersección exacta"
-fi
-if [[ -f "outputs/comparison/leaderboard.csv" ]]; then
-  append_file_section "outputs/comparison/leaderboard.csv" "Leaderboard general"
-fi
-if [[ -f "outputs/comparison/evaluation_window_comparison.csv" ]]; then
-  append_file_section "outputs/comparison/evaluation_window_comparison.csv" "Comparación de ventana de evaluación"
-fi
-if [[ -f "outputs/comparison/ablation_effects_common_intersection.csv" ]]; then
-  append_file_section "outputs/comparison/ablation_effects_common_intersection.csv" "Efectos de ablación en intersección común"
-fi
-if [[ -f "${CONTEXT_ROOT}/diagnostics/pytest_q.txt" ]]; then
-  append_file_section "${CONTEXT_ROOT}/diagnostics/pytest_q.txt" "Resultado de pytest"
-fi
-
-cat >> "$REPORT_MD" <<'EOF'
-
-## Archivos incluidos
-
-Ver `manifest.txt`.
-
-## Uso en el siguiente chat
-
-Adjuntar el `.tar.gz` generado y pegar el contenido de `prompt_siguiente_chat_fase3_4.md`.
-
-EOF
-
-# 6) Prompt para el siguiente chat.
-cat > "$PROMPT_MD" <<'EOF'
-# Prompt para siguiente chat — StoHyMoLAP Fase 3.4
-
-Continuemos con StoHyMoLAP desde Fase 3.4.
-
-## Estado actual
-
-Ya se avanzó la Fase 3 de la matriz experimental de ablaciones:
-
-- Fase 3.0A cerrada: paquete saneado, imports recuperados, scripts base restaurados.
-- Fase 3.1 cerrada: matriz canónica E0–E8 definida.
-- Fase 3.2 cerrada: ventana común de evaluación implementada.
-- Fase 3.3A cerrada funcionalmente: E0–E8 corren y existe leaderboard común por intersección exacta.
-
-Matriz canónica:
-
-1. `E0_RAMIS_DET_NOBF`
-2. `E1_RAMIS_DET_BF`
-3. `E2_RAMIS_LEVY_NOBF`
-4. `E3_RAMIS_LEVY_BF`
-5. `E4_ML_PURE_XGB`
-6. `E5_HYB_XGB_MEAN`
-7. `E6_HYB_XGB_QUANTILES`
-8. `E7_HYB_GRU_MEAN`
-9. `E8_HYB_GRU_QUANTILES`
-
-## Resultados principales actuales
-
-El leaderboard común por intersección exacta tiene como mejor modelo:
-
-- `E8_HYB_GRU_QUANTILES`: NSE ≈ 0.8491, KGE ≈ 0.8986.
-- `E6_HYB_XGB_QUANTILES`: NSE ≈ 0.7399, KGE ≈ 0.8098.
-- `E7_HYB_GRU_MEAN`: NSE ≈ 0.6865, KGE ≈ 0.7891.
-- `E5_HYB_XGB_MEAN`: NSE ≈ 0.6262, KGE ≈ 0.7146.
-- `E4_ML_PURE_XGB`: NSE ≈ 0.5752, KGE ≈ 0.6609.
-- Los físicos E0–E3 quedan por debajo en NSE, pero E3 tiene KGE competitivo y conserva valor físico/estocástico.
-
-## Advertencias metodológicas
-
-1. `E7` y `E8` pueden NO ser GRU real si el entorno no tiene TensorFlow/PyTorch. El log indicó fallback MLP sobre secuencias aplanadas. Revisar backend antes de redactar el paper.
-2. En Fase 3.3A se implementó postproceso auditable `Qsim = max(Qsim_raw, 0)` solo para ML/híbridos. Revisar `postprocessing_report.json`, especialmente en E8.
-3. La incertidumbre física E2/E3 tiene PICP bajo; tratarla como referencia estocástica no calibrada, salvo que se implemente calibración/ensanchar bandas.
-4. Revisar si aún hay `__pycache__`/`.pyc` versionados y limpiar Git antes de nuevos commits.
-5. No incluir carpetas externas accidentales como `../texto/`.
-
-## Objetivo de Fase 3.4
-
-Preparar la salida publicable:
-
-1. Auditoría de leakage:
-   - confirmar que train/validation están separados temporalmente;
-   - confirmar que lags/ventanas no usan información futura;
-   - confirmar que umbrales de régimen se calculan solo con train;
-   - confirmar que la ventana común se aplica consistentemente.
-2. Figuras:
-   - hidrograma validation para E0/E1/E3/E4/E6/E8;
-   - FDC Qobs-Qsim;
-   - scatter Qobs-Qsim;
-   - residuos por régimen;
-   - comparación de componentes Qfast/Qbase/Qtotal;
-   - bandas físicas E3/E2 como referencia, con advertencia de subdispersión.
-3. Tablas:
-   - leaderboard común;
-   - métricas por régimen;
-   - efectos de ablación;
-   - resumen de postproceso ML;
-   - estado de backend para E7/E8.
-4. README/resultados:
-   - actualizar narrativa de Fase 3;
-   - distinguir “híbrido secuencial fallback MLP” vs “GRU real”;
-   - listar limitaciones.
-5. Generar parches por subfase:
-   - 3.4A auditoría de leakage y QA;
-   - 3.4B figuras;
-   - 3.4C tablas paper-ready;
-   - 3.4D reporte final.
-
-Primero revisa el contexto adjunto y dime:
-- si hay que limpiar Git antes de seguir;
-- si E7/E8 deben renombrarse o solo documentar backend;
-- qué outputs ya están listos para paper;
-- qué parches conviene aplicar en 3.4A.
-Después genera el parche 3.4A.
-EOF
-
-# 7) Manifest y paquete.
-{
-  echo "# Manifest — ${CONTEXT_BASENAME}"
-  echo "# Generado: $(date -Iseconds)"
-  echo
-  find "$CONTEXT_ROOT" -type f | sort
-} > "$MANIFEST_TXT"
-
-tar -czf "$PKG_FILE" -C "contextos" "$CONTEXT_BASENAME"
-
-echo
-echo "Contexto generado:"
-echo "  ${REPORT_MD}"
-echo
-echo "Prompt siguiente chat:"
-echo "  ${PROMPT_MD}"
-echo
-echo "Paquete tar.gz:"
-echo "  ${PKG_FILE}"
-echo
-echo "Adjunta en el siguiente chat el .tar.gz y pega el contenido de:"
-echo "  ${PROMPT_MD}"
-echo
-echo "Sugerencia antes de cambiar de chat:"
-echo "  1) Revisa ${CONTEXT_ROOT}/diagnostics/git_tracked_pycache.txt"
-echo "  2) Si aparecen .pyc versionados, límpialos antes de seguir."

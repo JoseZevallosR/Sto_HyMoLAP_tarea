@@ -1,0 +1,32 @@
+Hybrid hydrological modelling combines process-based structure with the
+predictive flexibility of machine learning (ML), but often leaves unclear
+which component drives improved streamflow prediction. We evaluate a controlled stochastic physical--ML modelling framework for
+daily streamflow simulation in the high-Andean Ramis basin, within the
+Lake Titicaca system of southern Peru. The framework couples a lumped RAMIS
+rainfall--runoff core, an optional linear baseflow reservoir,
+L\'{e}vy-type ($\alpha$-stable) stochastic perturbations, Monte Carlo
+physical ensembles, and ML emulators trained from observed forcings or
+from stochastic-ensemble descriptors. Nine experiments (E0--E8) were
+evaluated over a common validation window from 8~January~2009 to
+31~December~2020 ($n=4367$ daily samples), with temporal-leakage and
+backend audits embedded in the evidence chain.
+
+Quantile descriptors from the stochastic physical ensemble provided the
+largest robust gain. The gradient-boosting quantile hybrid reached
+NSE\,=\,0.740 and KGE\,=\,0.810, improving NSE by 0.311 relative to the
+complete stochastic physical model and by 0.165 relative to the pure ML
+baseline. Replacing ensemble-mean features with ensemble quantiles
+alone added 0.114 NSE, showing that distributional physical descriptors
+contain information not captured by a single mean trajectory. The
+baseflow reservoir modestly improved the deterministic physical
+baseline, whereas direct L\'{e}vy perturbations produced inconsistent
+point-prediction gains. The stochastic physical bands were strongly
+underdispersive (PICP\,=\,0.004 against a nominal 0.95 target), so the
+ensemble is more useful as ML features than as calibrated predictive
+uncertainty. The numerically best run (NSE\,=\,0.849, KGE\,=\,0.899,
+RMSE\,=\,0.210~m$^3$\,s$^{-1}$) was labelled as GRU but executed as a
+fallback multilayer perceptron on flattened sequences; it is not
+evidence of recurrent-network superiority. These findings support
+stochastic physical--ML hybridization while showing that uncertainty
+calibration, low-flow correction and backend-aware reporting remain
+essential for defensible hydrological modelling.
